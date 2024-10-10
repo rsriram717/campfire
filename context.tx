@@ -1,0 +1,39 @@
+App Objective:
+You are building a restaurant recommendation app where users can input their past favorite restaurants and receive personalized recommendations for similar restaurants in a specific city. Initially, this is for a single user, but it will eventually support multiple users and automatically track dining history.
+
+Phase 1: Single User Input and Recommendations
+User Inputs: The user will enter:
+Number of people in their group.
+Up to 5 favorite restaurants they have liked.
+City for the restaurant search.
+System Output: Based on the user’s input, the system will recommend 3 similar restaurants in the defined city.
+Functionality for the Initial Version:
+User Input:
+
+The user enters favorite restaurants and a city.
+Recommendation Logic:
+
+The app uses GPT-4 via the OpenAI API to find similar restaurants. It constructs a prompt based on the user’s favorite restaurants and city, then gets recommendations from GPT-4.
+Modular Design:
+
+The recommendation logic is modular, allowing you to switch from GPT-4 to other APIs (e.g., OpenTable, Yelp) in the future.
+Current Progress:
+Backend (Flask):
+You’ve set up a basic Flask app to handle:
+
+A root route (/) to verify the server is running.
+A POST route (/get_recommendations) to receive user input and return restaurant recommendations.
+The app is integrated with the GPT-4 API, and the function get_similar_restaurants sends a request to GPT-4 to generate restaurant recommendations.
+
+Testing:
+You’ve been testing the app via a browser for the root route (/) and are now moving to testing the POST route with Postman.
+Postman Setup:
+You are using Postman to send POST requests to the /get_recommendations endpoint with a JSON payload that contains the user’s favorite restaurants and the city. The Flask server responds with a JSON list of recommended restaurants.
+
+Next Steps:
+Test the functionality using Postman and ensure the GPT-4 API integration works correctly.
+Handle error cases (e.g., invalid input, API failures).
+Refine the recommendation logic or prompt construction if needed to improve the quality of restaurant suggestions.
+Future Enhancements:
+Expand to Multiple Users: Allow multiple users to input preferences and receive mutually acceptable restaurant recommendations.
+Automatic History Tracking: In future phases, the app will track users' dining history to automate recommendations without manual input.
