@@ -22,14 +22,14 @@ def get_similar_restaurants(favorite_restaurants, city, num_recommendations=3):
 
         # Parse and return the recommendations
         restaurants = response.choices[0].message.content.split('\n')
-        print("Recommended Restaurants:")
+        recommendations = []
         for restaurant in restaurants:
             if restaurant.strip():  # This check removes empty lines
                 name, description = restaurant.split(' - ', 1)
-                print(f"{name}")
-                print(f"   {description}")
-                print()  # Add an empty line between restaurants
-        
+                recommendations.append({"name": name, "description": description.strip()})
+
+        return recommendations  # Return the list of recommendations as a JSON-compatible structure
+
     except Exception as e:
         print(f"Error with GPT-4 API: {e}")
         return []
@@ -42,13 +42,3 @@ def check_api_key():
     except Exception as e:
         print(f"Error: {e}")
         print("API key may not be valid or there's a connection issue.")
-
-# Example usage
-if __name__ == "__main__":
-    # Input from the user
-    favorite_restaurants = ["Boqueria", "Cafe Ba-Ba-Reeba", "Sapori Trattoria"]
-    city = "Chicago"
-    
-    # Get recommendations
-    recommendations = get_similar_restaurants(favorite_restaurants, city)
-    print("Recommended Restaurants:", recommendations)
