@@ -91,6 +91,12 @@
 
 <div class="container">
     <form id="restaurant-form">
+        <label for="username">Username:</label>
+        <input type="text" id="username" placeholder="Enter your username" required>
+        
+        <label for="email">Email:</label>
+        <input type="email" id="email" placeholder="Enter your email" required>
+        
         <label for="restaurants">Favorite Restaurants (up to 5):</label>
         <input type="text" id="restaurants" placeholder="Restaurant names, comma separated" required>
         
@@ -107,6 +113,8 @@
     document.getElementById('restaurant-form').addEventListener('submit', function(e) {
         e.preventDefault();
 
+        const username = document.getElementById('username').value.trim();
+        const email = document.getElementById('email').value.trim();
         const restaurants = document.getElementById('restaurants').value.split(',').map(restaurant => restaurant.trim());
         const city = document.getElementById('city').value.trim();
 
@@ -117,33 +125,31 @@
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                username: username,
+                email: email,
                 favorite_restaurants: restaurants,
                 city: city
             }),
         })
         .then(response => response.json())
         .then(data => {
-            // Display the recommendations
             const recommendationsDiv = document.getElementById('recommendations');
-            recommendationsDiv.innerHTML = '<h3>Recommended Restaurants:</h3><ul>';
+            recommendationsDiv.innerHTML = ''; // Clear previous recommendations
 
-            if (data.recommendations) {
-                data.recommendations.forEach(restaurant => {
-                    recommendationsDiv.innerHTML += `
-                        <li>
-                            <span class="restaurant-name">${restaurant.name}</span> - 
-                            <span class="restaurant-description">${restaurant.description}</span>
-                        </li>`;
+            if (data.recommendations && data.recommendations.length > 0) {
+                const ul = document.createElement('ul'); // Create a list to hold recommendations
+                data.recommendations.forEach(rec => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span class="restaurant-name">${rec.name}</span>: <span class="restaurant-description">${rec.description}</span>`;
+                    ul.appendChild(li);
                 });
+                recommendationsDiv.appendChild(ul); // Append the list to the recommendations div
             } else {
-                recommendationsDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+                recommendationsDiv.innerHTML = 'No recommendations found.';
             }
-
-            recommendationsDiv.innerHTML += '</ul>';
         })
         .catch(error => {
             console.error('Error:', error);
-            document.getElementById('recommendations').innerHTML = `<p>Error fetching recommendations. Please try again later.</p>`;
         });
     });
 </script>

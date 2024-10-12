@@ -22,11 +22,16 @@ def get_similar_restaurants(favorite_restaurants, city, num_recommendations=3):
 
         # Parse and return the recommendations
         restaurants = response.choices[0].message.content.split('\n')
+        print("API Response:", restaurants)  # Debugging line
         recommendations = []
         for restaurant in restaurants:
             if restaurant.strip():  # This check removes empty lines
-                name, description = restaurant.split(' - ', 1)
-                recommendations.append({"name": name, "description": description.strip()})
+                parts = restaurant.split(' - ', 1)
+                if len(parts) == 2:  # Ensure there are exactly two parts
+                    name, description = parts
+                    recommendations.append({"name": name, "description": description.strip()})
+                else:
+                    print(f"Unexpected format: {restaurant}")  # Log unexpected formats
 
         return recommendations  # Return the list of recommendations as a JSON-compatible structure
 

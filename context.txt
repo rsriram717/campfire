@@ -37,3 +37,21 @@ Refine the recommendation logic or prompt construction if needed to improve the 
 Future Enhancements:
 Expand to Multiple Users: Allow multiple users to input preferences and receive mutually acceptable restaurant recommendations.
 Automatic History Tracking: In future phases, the app will track users' dining history to automate recommendations without manual input.
+
+Database Structure & Schema Design:
+Key Entities:
+
+User:
+Tracks user profiles and, eventually, preferences (e.g., cuisine, dining frequency).
+
+Restaurant:
+Stores restaurant metadata (name, location, cuisine type, etc.).
+This will be used to identify similar restaurants and store restaurant details for the recommendation engine.
+
+UserRestaurantInteraction:
+Tracks the relationship between users and restaurants (likes, visits, ratings).
+This entity will evolve to track user behavior, helping refine recommendations.
+
+Recommendation:
+Stores historical recommendations provided to users or user groups.
+Tracks which restaurants were suggested for analysis and improving the algorithm.
