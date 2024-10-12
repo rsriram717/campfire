@@ -28,8 +28,8 @@ def get_recommendations():
     try:
         # Get data from POST request
         data = request.json
-        username = data['username']
-        email = data['email']
+        user_name = data['user']  # Change to "user"
+        email = "test@test.com"  # Always record this email
         favorite_restaurants = data['favorite_restaurants']
         city = data['city']
         
@@ -37,7 +37,7 @@ def get_recommendations():
         user = User.query.filter_by(email=email).first()
         if not user:
             # Create a new user if they don't exist
-            user = User(username=username, email=email)
+            user = User(username=user_name, email=email)  # Change to "user_name"
             db.session.add(user)
             db.session.commit()
 

@@ -91,11 +91,8 @@
 
 <div class="container">
     <form id="restaurant-form">
-        <label for="username">Username:</label>
-        <input type="text" id="username" placeholder="Enter your username" required>
-        
-        <label for="email">Email:</label>
-        <input type="email" id="email" placeholder="Enter your email" required>
+        <label for="name">Name:</label>
+        <input type="text" id="name" placeholder="Enter your name" required>
         
         <label for="restaurants">Favorite Restaurants (up to 5):</label>
         <input type="text" id="restaurants" placeholder="Restaurant names, comma separated" required>
@@ -113,8 +110,7 @@
     document.getElementById('restaurant-form').addEventListener('submit', function(e) {
         e.preventDefault();
 
-        const username = document.getElementById('username').value.trim();
-        const email = document.getElementById('email').value.trim();
+        const name = document.getElementById('name').value.trim();
         const restaurants = document.getElementById('restaurants').value.split(',').map(restaurant => restaurant.trim());
         const city = document.getElementById('city').value.trim();
 
@@ -125,8 +121,8 @@
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                username: username,
-                email: email,
+                user: name,  // Change to "user"
+                email: "test@test.com",  // Always record this email
                 favorite_restaurants: restaurants,
                 city: city
             }),
