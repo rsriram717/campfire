@@ -1,6 +1,7 @@
 // script.js
 document.getElementById('restaurant-form').addEventListener('submit', function(e) {
     e.preventDefault();
+
     const name = document.getElementById('name').value.trim();
     const restaurants = document.getElementById('restaurants').value.split(',').map(restaurant => restaurant.trim());
     const city = document.getElementById('city').value.trim();
@@ -13,7 +14,6 @@ document.getElementById('restaurant-form').addEventListener('submit', function(e
         },
         body: JSON.stringify({
             user: name,
-            email: "test@test.com",
             favorite_restaurants: restaurants,
             city: city
         }),
@@ -24,20 +24,17 @@ document.getElementById('restaurant-form').addEventListener('submit', function(e
         recommendationsDiv.innerHTML = ''; // Clear previous recommendations
 
         if (data.recommendations && data.recommendations.length > 0) {
-            const ul = document.createElement('ul'); // Create a list to hold recommendations
             data.recommendations.forEach(rec => {
-                const li = document.createElement('li');
-                const restaurantName = rec.name.replace(/\*/g, '').trim(); // Remove asterisks
-                li.innerHTML = `<span class="restaurant-name" style="font-weight: bold;">${restaurantName}</span>: <span class="restaurant-description">${rec.description}</span>`;
-                ul.appendChild(li);
+                const p = document.createElement('p'); // Create a paragraph for each recommendation
+                p.innerHTML = `<strong>${rec.name}</strong>: ${rec.description}`;
+                recommendationsDiv.appendChild(p); // Add each recommendation to the div
             });
-            recommendationsDiv.appendChild(ul); // Append the list to the recommendations div
         } else {
-            recommendationsDiv.innerHTML = 'No recommendations found.';
+            recommendationsDiv.innerHTML = '<p>No recommendations found.</p>';
         }
     })
     .catch(error => {
         console.error('Error:', error);
+        document.getElementById('recommendations').innerHTML = '<p>Failed to load recommendations. Please try again.</p>';
     });
 });
-
