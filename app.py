@@ -3,7 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 import openai
 import os
 from openai_example import get_similar_restaurants
-from models import db, User, Restaurant, FavoriteRestaurant, Recommendation  # Import models
+from models import db, user, Restaurant, FavoriteRestaurant, Recommendation  # Import models
+from flask_migrate import Migrate
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -14,6 +15,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SQLAlchemy
 db.init_app(app)  # Correctly initialize SQLAlchemy with the app
+
+# Initialize Flask-Migrate
+migrate = Migrate(app, db)
 
 # Load GPT-4 API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -34,18 +38,18 @@ def get_recommendations():
         city = data['city']
         
         # Check if the user already exists
-        user = User.query.filter_by(email=email).first()
-        if not user:
+        existing_user = user.query.filter_by(email=email).first()
+        if not existing_user:
             # Create a new user if they don't exist
-            user = User(username=user_name, email=email)  # Change to "user_name"
-            db.session.add(user)
+            new_user = user(username=user_name, email=email)  # Change to "user_name"
+            db.session.add(new_user)
             db.session.commit()
 
         # Save favorite restaurants for the user
         for restaurant_name in favorite_restaurants:
             restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
             if restaurant:
-                favorite = FavoriteRestaurant(user_id=user.id, restaurant_id=restaurant.id)
+                favorite = FavoriteRestaurant(user_id=new_user.user, restaurant_id=restaurant.id)
                 db.session.add(favorite)
 
         db.session.commit()

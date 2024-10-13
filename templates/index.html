@@ -5,83 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant Recommendations</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Roboto', sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f0f4f8;
-            color: #333;
-        }
-        header {
-            background-color: #4CAF50;
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-        h1 {
-            margin: 0;
-            font-size: 2.5em;
-        }
-        .container {
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin: 10px 0 5px;
-            font-weight: bold;
-        }
-        input {
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            font-size: 1em;
-        }
-        button {
-            padding: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        #recommendations {
-            margin-top: 20px;
-        }
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        li {
-            background: #e8f5e9;
-            margin: 10px 0;
-            padding: 15px;
-            border-radius: 4px;
-            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
-        }
-        .restaurant-name {
-            color: #4CAF50;
-            font-weight: bold;
-            font-size: 1.2em;
-        }
-        .restaurant-description {
-            color: #555;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css"> <!-- Link to the CSS file -->
 </head>
 <body>
 
@@ -106,49 +30,6 @@
     <div id="recommendations"></div>
 </div>
 
-<script>
-    document.getElementById('restaurant-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const name = document.getElementById('name').value.trim();
-        const restaurants = document.getElementById('restaurants').value.split(',').map(restaurant => restaurant.trim());
-        const city = document.getElementById('city').value.trim();
-
-        // Send the input data to the Flask API
-        fetch('/get_recommendations', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                user: name,  // Change to "user"
-                email: "test@test.com",  // Always record this email
-                favorite_restaurants: restaurants,
-                city: city
-            }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            const recommendationsDiv = document.getElementById('recommendations');
-            recommendationsDiv.innerHTML = ''; // Clear previous recommendations
-
-            if (data.recommendations && data.recommendations.length > 0) {
-                const ul = document.createElement('ul'); // Create a list to hold recommendations
-                data.recommendations.forEach(rec => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span class="restaurant-name">${rec.name}</span>: <span class="restaurant-description">${rec.description}</span>`;
-                    ul.appendChild(li);
-                });
-                recommendationsDiv.appendChild(ul); // Append the list to the recommendations div
-            } else {
-                recommendationsDiv.innerHTML = 'No recommendations found.';
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
-    });
-</script>
-
+<script src="script.js"></script> <!-- Link to the JavaScript file -->
 </body>
 </html>
