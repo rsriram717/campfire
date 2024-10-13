@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant Recommendations</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="../static/styles.css">
 </head>
 <body>
 
@@ -25,11 +24,12 @@
         <input type="text" id="city" placeholder="Enter city" required class="input-field">
         
         <button type="submit" class="submit-btn">Get Recommendations</button>
+        <div id="loading" class="loading" style="display: none;">Loading...</div>
     </form>
 
     <div id="recommendations" class="recommendations-output"></div>
 </div>
 
-<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script src="../static/script.js"></script>
 </body>
 </html>
