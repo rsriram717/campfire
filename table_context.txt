@@ -1,0 +1,25 @@
+This file provides context for the intended database relationships
+
+User Table (User):
+id: Integer - Primary Key (auto-incrementing).
+name: String(50) - The name of the user.
+email: String(120) - Must be unique and cannot be null.
+
+Restaurant Table (Restaurant):
+id: Integer - Primary Key (auto-incrementing).
+name: String(100) - Name of the restaurant (must be unique).
+location: String(100) - Location of the restaurant.
+cuisine_type: String(50) - Type of cuisine.
+This table will store all restaurants that users have either input or received as recommendations, ensuring no duplicates.
+
+UserRequest Table (UserRequest):
+id: Integer - Primary Key (auto-incrementing).
+user_id: Integer - Foreign Key referencing User.id.
+input_restaurant_id: Integer - Foreign Key referencing Restaurant.id.
+recommended_restaurant_id: Integer - Foreign Key referencing Restaurant.id.
+This table records every user request, including both the input restaurants and the restaurants recommended. It links a user to each of their individual recommendation requests.
+
+Relationships:
+The User table records the personal details of users, such as name and email, every time they log in.
+The Restaurant table maintains a unique record of all restaurants involved in the recommendations, whether input or recommended.
+The UserRequest table captures the interaction between users and the restaurants for each recommendation event, linking users to the restaurants they input as well as those that are recommended.

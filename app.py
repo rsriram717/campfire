@@ -2,8 +2,8 @@ from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 import openai
 import os
-from openai_example import get_similar_restaurants
-from models import db, user, Restaurant, FavoriteRestaurant, Recommendation  # Import models
+from .openai_example import get_similar_restaurants
+from .models import db, user, Restaurant, FavoriteRestaurant, Recommendation  # Import models
 from flask_migrate import Migrate
 
 # Initialize Flask app
