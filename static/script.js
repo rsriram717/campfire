@@ -3,7 +3,9 @@ document.getElementById('restaurant-form').addEventListener('submit', function(e
     e.preventDefault();
 
     const name = document.getElementById('name').value.trim();
-    const restaurants = document.getElementById('restaurants').value.split(',').map(restaurant => restaurant.trim());
+    const restaurants = document.getElementById('restaurants').value.split(',').map(restaurant => {
+        return restaurant.replace(/^\d+\s*/, '').trim(); // Remove leading numbers
+    });
     const city = document.getElementById('city').value.trim();
 
     // Show the loading spinner
@@ -21,7 +23,7 @@ document.getElementById('restaurant-form').addEventListener('submit', function(e
         },
         body: JSON.stringify({
             user: name,
-            favorite_restaurants: restaurants,
+            input_restaurants: restaurants,
             city: city
         }),
     })

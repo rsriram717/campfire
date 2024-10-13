@@ -1,15 +1,17 @@
 import os
 import openai
+import re
 
 # Load API key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def get_similar_restaurants(favorite_restaurants, city, num_recommendations=3):
+def get_similar_restaurants(input_restaurants, city, num_recommendations=3):
     # Construct a prompt for GPT-4
     prompt = (
         f"Recommend {num_recommendations} restaurants similar to the following: "
-        f"{', '.join(favorite_restaurants)} in {city}. "
+        f"{', '.join(input_restaurants)} in {city}. "
         f"List the responses as <name> - <2-3 short phrases of why it would be a good fit>"
+        f"Do not number the responses"
     )
 
     try:
@@ -29,7 +31,8 @@ def get_similar_restaurants(favorite_restaurants, city, num_recommendations=3):
                 parts = restaurant.split(' - ', 1)
                 if len(parts) == 2:  # Ensure there are exactly two parts
                     name, description = parts
-                    recommendations.append({"name": name, "description": description.strip()})
+                    sanitized_name = sanitize_name(name)
+                    recommendations.append({"name": sanitized_name, "description": description.strip()})
                 else:
                     print(f"Unexpected format: {restaurant}")  # Log unexpected formats
 
@@ -47,3 +50,7 @@ def check_api_key():
     except Exception as e:
         print(f"Error: {e}")
         print("API key may not be valid or there's a connection issue.")
+
+def sanitize_name(name):
+    # Remove special characters from the restaurant name
+    return re.sub(r'[^a-zA-Z0-9\s]', '', name)
