@@ -3,14 +3,14 @@ from flask_sqlalchemy import SQLAlchemy
 import openai
 import os
 from .openai_example import get_similar_restaurants
-from .models import db, user, Restaurant, FavoriteRestaurant, Recommendation  # Import models
+from .models import db, User, Restaurant, UserRequest  # Import models
 from flask_migrate import Migrate
 
 # Initialize Flask app
 app = Flask(__name__)
 
 # Configure SQLite database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///restaurant_recommendations.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:/Users/Rishi Sriram/Documents/personal/campfire/restaurant_recommendations.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SQLAlchemy
@@ -32,31 +32,41 @@ def get_recommendations():
     try:
         # Get data from POST request
         data = request.json
-        user_name = data['user']  # Change to "user"
+        user_name = data['user']  # User's name
         email = "test@test.com"  # Always record this email
         favorite_restaurants = data['favorite_restaurants']
         city = data['city']
         
         # Check if the user already exists
-        existing_user = user.query.filter_by(email=email).first()
+        existing_user = User.query.filter_by(email=email).first()
         if not existing_user:
             # Create a new user if they don't exist
-            new_user = user(username=user_name, email=email)  # Change to "user_name"
+            new_user = User(name=user_name, email=email)  # Create a new User instance
             db.session.add(new_user)
             db.session.commit()
-
-        # Save favorite restaurants for the user
-        for restaurant_name in favorite_restaurants:
-            restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
-            if restaurant:
-                favorite = FavoriteRestaurant(user_id=new_user.user, restaurant_id=restaurant.id)
-                db.session.add(favorite)
-
-        db.session.commit()
+        else:
+            new_user = existing_user  # Use the existing user
 
         # Call the GPT-4 recommendation function
         recommendations = get_similar_restaurants(favorite_restaurants, city)
         
+        # Save user request and recommendations
+        for restaurant_name in favorite_restaurants:
+            restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
+            if restaurant:
+                # Log the user request
+                for rec in recommendations:
+                    recommended_restaurant = Restaurant.query.filter_by(name=rec['name']).first()
+                    if recommended_restaurant:
+                        user_request = UserRequest(
+                            user_id=new_user.id,
+                            input_restaurant_id=restaurant.id,
+                            recommended_restaurant_id=recommended_restaurant.id
+                        )
+                        db.session.add(user_request)
+
+        db.session.commit()
+
         # Print recommendations for debugging
         print("Recommendations:", recommendations)
         
