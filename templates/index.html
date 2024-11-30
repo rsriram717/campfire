@@ -4,32 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant Recommendations</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
 
-<header>
+<header class="bg-primary text-white text-center py-4">
     <h1>Get Restaurant Recommendations</h1>
 </header>
 
-<div class="container">
+<div class="container mt-5">
     <form id="restaurant-form">
-        <label for="name">Name:</label>
-        <input type="text" id="name" placeholder="Enter your name" required class="input-field">
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" id="name" placeholder="Enter your name" required class="form-control">
+        </div>
         
-        <label for="restaurants">Favorite Restaurants (up to 5):</label>
-        <input type="text" id="restaurants" placeholder="Restaurant names, comma separated" required class="input-field">
+        <div class="form-group">
+            <label>Favorite Restaurants:</label>
+            <input type="text" id="restaurant1" placeholder="Restaurant 1" class="uiverse-input">
+            <input type="text" id="restaurant2" placeholder="Restaurant 2" class="uiverse-input">
+            <input type="text" id="restaurant3" placeholder="Restaurant 3" class="uiverse-input">
+            <input type="text" id="restaurant4" placeholder="Restaurant 4" class="uiverse-input">
+            <input type="text" id="restaurant5" placeholder="Restaurant 5" class="uiverse-input">
+        </div>
         
-        <label for="city">City:</label>
-        <input type="text" id="city" placeholder="Enter city" required class="input-field">
+        <div class="form-group">
+            <label for="city">City:</label>
+            <input type="text" id="city" placeholder="Enter city" required class="form-control">
+        </div>
         
-        <button type="submit" class="submit-btn">Get Recommendations</button>
-        <div id="loading" class="loading" style="display: none;">Loading...</div>
+        <button type="submit" class="btn btn-primary btn-block">Get Recommendations</button>
+        <div id="loading" class="loading mt-3" style="display: none;">Loading...</div>
     </form>
 
-    <div id="recommendations" class="recommendations-output"></div>
+    <div id="recommendations" class="recommendations-output mt-4"></div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
