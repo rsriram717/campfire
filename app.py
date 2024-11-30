@@ -17,7 +17,7 @@ if python_path and python_path not in sys.path:
     sys.path.append(python_path)
 
 from openai_example import get_similar_restaurants, sanitize_name
-from models import db, User, Restaurant, UserRequest  # Import models
+from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType  # Import models
 
 # Check if the OPENAI_API_KEY environment variable is set
 if not os.getenv("OPENAI_API_KEY"):
@@ -67,6 +67,11 @@ def get_recommendations():
         else:
             new_user = existing_user
 
+        # Create a new user request
+        new_user_request = UserRequest(user_id=new_user.id, city=city)
+        db.session.add(new_user_request)
+        db.session.commit()
+
         # Ensure input restaurants are added to the Restaurant table
         for restaurant_name in input_restaurants:
             restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
@@ -80,28 +85,28 @@ def get_recommendations():
                 db.session.commit()
                 restaurant = new_restaurant
 
-            # Get recommendations from OpenAI
-            recommended_restaurants = get_similar_restaurants(input_restaurants, city)
+            # Log input restaurants
+            request_restaurant = RequestRestaurant(
+                user_request_id=new_user_request.id,
+                restaurant_id=restaurant.id,
+                type=RequestType.input
+            )
+            db.session.add(request_restaurant)
 
-            # Add recommended restaurants to the database and UserRequest
-            for rec in recommended_restaurants:
-                recommended_restaurant = Restaurant.query.filter_by(name=rec['name']).first()
-                if not recommended_restaurant:
-                    # Use the city as the location for recommended restaurants
-                    new_recommended_restaurant = Restaurant(name=rec['name'], location=city, cuisine_type=None)
-                    db.session.add(new_recommended_restaurant)
-                    db.session.commit()
-                    recommended_restaurant = new_recommended_restaurant
+        # Get recommendations from OpenAI
+        recommended_restaurants = get_similar_restaurants(input_restaurants, city)
 
-                # Record the user request in the UserRequest table
-                user_request = UserRequest(
-                    user_id=new_user.id,
-                    input_restaurant_id=restaurant.id,
-                    recommended_restaurant_id=recommended_restaurant.id
+        # Log recommended restaurants
+        for rec in recommended_restaurants:
+            recommended_restaurant = Restaurant.query.filter_by(name=rec['name']).first()
+            if recommended_restaurant:
+                request_restaurant = RequestRestaurant(
+                    user_request_id=new_user_request.id,
+                    restaurant_id=recommended_restaurant.id,
+                    type=RequestType.recommendation
                 )
-                db.session.add(user_request)
+                db.session.add(request_restaurant)
 
-        # Commit all changes
         db.session.commit()
 
         logging.debug(f"\n\n\nRecommended restaurants: {recommended_restaurants}")
