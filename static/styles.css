@@ -65,14 +65,16 @@ header {
 
 .loading::after {
     content: '';
+    display: inline-block;
+    width: 20px;
+    height: 20px;
     border: 4px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     border-top: 4px solid #4CAF50; /* Spinner color */
-    width: 20px;
-    height: 20px;
     animation: spin 1s linear infinite;
 }
 
+/* Keyframes for spinner animation */
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
@@ -80,13 +82,6 @@ header {
 
 /* Recommendations Output */
 .recommendations-output {
-    margin-top: 30px;
-}
-
-.recommendations-output p {
-    background-color: #f0f4f8;
-    padding: 10px;
-    border-radius: 5px;
-    margin-bottom: 10px;
-    border-left: 4px solid #4CAF50;
+    margin-top: 20px;
+    font-size: 16px;
 }

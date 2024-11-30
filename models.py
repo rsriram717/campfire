@@ -21,10 +21,9 @@ class Restaurant(db.Model):
 
 class UserRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    request_id = db.Column(db.Integer, nullable=False)  # Auto-incrementing ID for each unique request
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     input_restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)
     recommended_restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'))
 
     def __repr__(self):
-        return f'<UserRequest {self.request_id}>'
+        return f'<UserRequest {self.id}>'

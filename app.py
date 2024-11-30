@@ -19,6 +19,10 @@ if python_path and python_path not in sys.path:
 from openai_example import get_similar_restaurants, sanitize_name
 from models import db, User, Restaurant, UserRequest  # Import models
 
+# Check if the OPENAI_API_KEY environment variable is set
+if not os.getenv("OPENAI_API_KEY"):
+    raise ValueError("OPENAI_API_KEY environment variable is not set.")
+
 # Initialize Flask app
 app = Flask(__name__)
 
@@ -61,10 +65,7 @@ def get_recommendations():
             db.session.add(new_user)
             db.session.commit()
         else:
-            new_user = existing_user  # Use the existing user
-
-        # Generate a unique request_id for this user request
-        request_id = UserRequest.query.count() + 1  # Alternatively, use a better approach for incrementing ID
+            new_user = existing_user
 
         # Ensure input restaurants are added to the Restaurant table
         for restaurant_name in input_restaurants:
@@ -75,40 +76,36 @@ def get_recommendations():
                 db.session.commit()
                 restaurant = new_restaurant
 
-            # Record the user request
-            user_request = UserRequest(
-                request_id=request_id,
-                user_id=new_user.id,
-                input_restaurant_id=restaurant.id
-            )
-            db.session.add(user_request)
+            # Get recommendations from OpenAI
+            recommended_restaurants = get_similar_restaurants(input_restaurants, city)
 
-        # Get recommendations from OpenAI
-        recommended_restaurants = get_similar_restaurants(input_restaurants, city)
+            # Add recommended restaurants to the database and UserRequest
+            for rec in recommended_restaurants:
+                recommended_restaurant = Restaurant.query.filter_by(name=rec['name']).first()
+                if not recommended_restaurant:
+                    new_recommended_restaurant = Restaurant(name=rec['name'])
+                    db.session.add(new_recommended_restaurant)
+                    db.session.commit()
+                    recommended_restaurant = new_recommended_restaurant
 
-        # Add a breakpoint here
-        pdb.set_trace()
+                # Record the user request in the UserRequest table
+                user_request = UserRequest(
+                    user_id=new_user.id,
+                    input_restaurant_id=restaurant.id,
+                    recommended_restaurant_id=recommended_restaurant.id
+                )
+                db.session.add(user_request)
 
-        # Add recommended restaurants to database and UserRequest
-        for rec in recommended_restaurants:
-            restaurant = Restaurant.query.filter_by(name=rec['name']).first()
-            if not restaurant:
-                new_restaurant = Restaurant(name=rec['name'])
-                db.session.add(new_restaurant)
-                db.session.commit()
-                restaurant = new_restaurant
-
-            # Record the recommended restaurant in the UserRequest table
-            user_request = UserRequest(
-                request_id=request_id,
-                user_id=new_user.id,
-                recommended_restaurant_id=restaurant.id
-            )
-            db.session.add(user_request)
-
+        # Commit all changes
         db.session.commit()
 
+        logging.debug(f"\n\n\nRecommended restaurants: {recommended_restaurants}")
         return jsonify({"recommendations": recommended_restaurants})
 
     except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)})
+
+if __name__ == '__main__':
+    print('test')
+    app.run(debug=True)

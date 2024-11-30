@@ -1,12 +1,13 @@
 import os
 import openai
 import re
+import logging
 
 # Load API key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def get_similar_restaurants(input_restaurants, city, num_recommendations=3):
-    # Construct a prompt for GPT-4
+    logging.debug("Constructing prompt for GPT-4.")
     prompt = (
         f"Recommend {num_recommendations} restaurants similar to the following: "
         f"{', '.join(input_restaurants)} in {city}. "
@@ -15,31 +16,33 @@ def get_similar_restaurants(input_restaurants, city, num_recommendations=3):
     )
 
     try:
-        # Call the GPT-4 API
+        logging.debug("Sending request to GPT-4 API.")
         response = openai.chat.completions.create(
             model="gpt-4o-mini",  # Specify GPT-4 model
             messages=[{"role": "user", "content": prompt}],
             max_tokens=150  # Limit the response length
         )
 
+        logging.debug(f"Raw API Response: {response}")
+
         # Parse and return the recommendations
         restaurants = response.choices[0].message.content.split('\n')
-        print("API Response:", restaurants)  # Debugging line
+        logging.debug(f"Parsed Restaurants: {restaurants}")
         recommendations = []
         for restaurant in restaurants:
-            if restaurant.strip():  # This check removes empty lines
+            if restaurant.strip():
                 parts = restaurant.split(' - ', 1)
-                if len(parts) == 2:  # Ensure there are exactly two parts
+                if len(parts) == 2:
                     name, description = parts
                     sanitized_name = sanitize_name(name)
                     recommendations.append({"name": sanitized_name, "description": description.strip()})
                 else:
-                    print(f"Unexpected format: {restaurant}")  # Log unexpected formats
+                    logging.warning(f"Unexpected format: {restaurant}")
 
-        return recommendations  # Return the list of recommendations as a JSON-compatible structure
+        return recommendations
 
     except Exception as e:
-        print(f"Error with GPT-4 API: {e}")
+        logging.error(f"Error with GPT-4 API: {e}")
         return []
 
 def check_api_key():
