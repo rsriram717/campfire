@@ -17,7 +17,7 @@
     <form id="restaurant-form">
         <div class="form-group">
             <label for="name">Name:</label>
-            <input type="text" id="name" placeholder="Enter your name" required class="form-control">
+            <input type="text" id="name" placeholder="Enter your name" required class="uiverse-input">
         </div>
         
         <div class="form-group">
@@ -31,7 +31,10 @@
         
         <div class="form-group">
             <label for="city">City:</label>
-            <input type="text" id="city" placeholder="Enter city" required class="form-control">
+            <select id="city" class="uiverse-select">
+                <option value="Chicago">Chicago</option>
+                <option value="New York">New York</option>
+            </select>
         </div>
         
         <button type="submit" class="btn btn-primary btn-block">Get Recommendations</button>
