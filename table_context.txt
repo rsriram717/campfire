@@ -1,25 +1,32 @@
-This file provides context for the intended database relationships
+# Table: User
+- id: Primary Key, Integer, Auto-increment
+- name: String(50), Unique, Not Null
+- email: String(120), Unique, Not Null
+- Purpose: Stores user information. Each user can have multiple requests for restaurant recommendations.
 
-User Table (User):
-id: Integer - Primary Key (auto-incrementing).
-name: String(50) - The name of the user.
-email: String(120) - Must be unique and cannot be null.
+# Table: Restaurant
+- id: Primary Key, Integer, Auto-increment
+- name: String(100), Unique, Not Null
+- location: String(100), Not Null
+- cuisine_type: String(50), Nullable
+- Purpose: Maintains a unique record of all restaurants involved in the recommendations, whether input or recommended.
 
-Restaurant Table (Restaurant):
-id: Integer - Primary Key (auto-incrementing).
-name: String(100) - Name of the restaurant (must be unique).
-location: String(100) - Location of the restaurant.
-cuisine_type: String(50) - Type of cuisine.
-This table will store all restaurants that users have either input or received as recommendations, ensuring no duplicates.
+# Table: UserRequest
+- id: Primary Key, Integer, Auto-increment
+- user_id: Foreign Key to User.id, Not Null
+- city: String(100), Not Null
+- timestamp: DateTime, Default to current timestamp
+- Purpose: Captures each recommendation request made by a user, linking them to the city and time of the request.
 
-UserRequest Table (UserRequest):
-id: Integer - Primary Key (auto-incrementing).
-user_id: Integer - Foreign Key referencing User.id.
-input_restaurant_id: Integer - Foreign Key referencing Restaurant.id.
-recommended_restaurant_id: Integer - Foreign Key referencing Restaurant.id.
-This table records every user request, including both the input restaurants and the restaurants recommended. It links a user to each of their individual recommendation requests.
+# Table: RequestRestaurant
+- id: Primary Key, Integer, Auto-increment
+- user_request_id: Foreign Key to UserRequest.id, Not Null
+- restaurant_id: Foreign Key to Restaurant.id, Not Null
+- type: Enum(RequestType), Not Null
+- Purpose: Links user requests to restaurants, indicating whether they are input or recommended.
 
-Relationships:
-The User table records the personal details of users, such as name and email, every time they log in.
-The Restaurant table maintains a unique record of all restaurants involved in the recommendations, whether input or recommended.
-The UserRequest table captures the interaction between users and the restaurants for each recommendation event, linking users to the restaurants they input as well as those that are recommended.
+# Relationships
+- A User can have multiple UserRequests (One-to-Many)
+- A UserRequest can have multiple RequestRestaurants (One-to-Many)
+- A Restaurant can be associated with multiple RequestRestaurants (One-to-Many)
+- RequestRestaurant.type indicates whether the restaurant is an input or a recommendation
