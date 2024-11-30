@@ -8,6 +8,9 @@ import sys
 import uuid
 import pdb
 import logging
+from datetime import datetime
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import Enum, DateTime
 
 load_dotenv()
 
@@ -17,7 +20,7 @@ if python_path and python_path not in sys.path:
     sys.path.append(python_path)
 
 from openai_example import get_similar_restaurants, sanitize_name
-from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType  # Import models
+from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType, UserRestaurantPreference, PreferenceType
 
 # Check if the OPENAI_API_KEY environment variable is set
 if not os.getenv("OPENAI_API_KEY"):
@@ -31,7 +34,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:/Users/Rishi Sriram/Documen
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SQLAlchemy
-db.init_app(app)  # Correctly initialize SQLAlchemy with the app
+db.init_app(app)
 
 # Initialize Flask-Migrate
 migrate = Migrate(app, db)
@@ -44,50 +47,40 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 
 @app.route('/')
 def index():
-    return render_template('index.html')  # Serve the HTML file
+    return render_template('index.html')
 
-# Flask route for getting recommendations
 @app.route('/get_recommendations', methods=['POST'])
 def get_recommendations():
     try:
-        # Get data from POST request
         data = request.json
         user_name = data['user']
-        email = "test@test.com"  # Always record this email for testing purposes
+        email = "test@test.com"
         input_restaurants = data['input_restaurants']
         city = data['city']
         
         logging.debug(f"Received request for user: {user_name}, city: {city}, input restaurants: {input_restaurants}")
 
-        # Check if the user already exists
         existing_user = User.query.filter_by(email=email).first()
         if not existing_user:
-            # Create a new user if they don't exist
             new_user = User(name=user_name, email=email)
             db.session.add(new_user)
             db.session.commit()
         else:
             new_user = existing_user
 
-        # Create a new user request
         new_user_request = UserRequest(user_id=new_user.id, city=city)
         db.session.add(new_user_request)
         db.session.commit()
 
-        # Ensure input restaurants are added to the Restaurant table
         for restaurant_name in input_restaurants:
             restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
             if not restaurant:
-                # Log the restaurant name and city for debugging
                 logging.debug(f"Adding new restaurant: {restaurant_name} in {city}")
-                
-                # Use the city as the location if no specific location is provided
                 new_restaurant = Restaurant(name=restaurant_name, location=city, cuisine_type=None)
                 db.session.add(new_restaurant)
                 db.session.commit()
                 restaurant = new_restaurant
 
-            # Log input restaurants
             request_restaurant = RequestRestaurant(
                 user_request_id=new_user_request.id,
                 restaurant_id=restaurant.id,
@@ -95,21 +88,17 @@ def get_recommendations():
             )
             db.session.add(request_restaurant)
 
-        # Get recommendations from OpenAI
         recommended_restaurants = get_similar_restaurants(input_restaurants, city)
         logging.debug(f"Recommended restaurants: {recommended_restaurants}")
 
-        # Log recommended restaurants
         for rec in recommended_restaurants:
             recommended_restaurant = Restaurant.query.filter_by(name=rec['name']).first()
             if not recommended_restaurant:
-                # Add the recommended restaurant to the database if it doesn't exist
                 logging.debug(f"Adding recommended restaurant: {rec['name']} in {city}")
                 recommended_restaurant = Restaurant(name=rec['name'], location=city, cuisine_type=None)
                 db.session.add(recommended_restaurant)
                 db.session.commit()
 
-            # Now add to request_restaurant
             request_restaurant = RequestRestaurant(
                 user_request_id=new_user_request.id,
                 restaurant_id=recommended_restaurant.id,
@@ -126,6 +115,86 @@ def get_recommendations():
         logging.error(f"Error in get_recommendations: {e}")
         db.session.rollback()
         return jsonify({"error": str(e)})
+
+@app.route('/get_restaurants', methods=['GET'])
+def get_restaurants():
+    try:
+        restaurants = Restaurant.query.all()
+        restaurant_list = [{"id": r.id, "name": r.name} for r in restaurants]
+        return jsonify({"restaurants": restaurant_list})
+    except Exception as e:
+        logging.error(f"Error fetching restaurants: {e}")
+        return jsonify({"error": str(e)})
+
+@app.route('/check_user', methods=['GET'])
+def check_user():
+    try:
+        user_name = request.args.get('name')
+        user = User.query.filter_by(name=user_name).first()
+        if user:
+            return jsonify({"exists": True})
+        else:
+            return jsonify({"exists": False})
+    except Exception as e:
+        logging.error(f"Error checking user: {e}")
+        return jsonify({"error": str(e)})
+
+@app.route('/save_preferences', methods=['POST'])
+def save_preferences():
+    try:
+        data = request.json
+        user_name = data['user_name']
+        preferences = data['preferences']
+
+        user = User.query.filter_by(name=user_name).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        for pref in preferences:
+            restaurant_id = pref['restaurant_id']
+            preference_type = pref['preference']
+
+            existing_pref = UserRestaurantPreference.query.filter_by(
+                user_id=user.id,
+                restaurant_id=restaurant_id
+            ).first()
+
+            if existing_pref:
+                if existing_pref.preference != preference_type:
+                    existing_pref.preference = preference_type
+                    existing_pref.timestamp = datetime.utcnow()
+            else:
+                new_pref = UserRestaurantPreference(
+                    user_id=user.id,
+                    restaurant_id=restaurant_id,
+                    preference=preference_type,
+                    timestamp=datetime.utcnow()
+                )
+                db.session.add(new_pref)
+
+        db.session.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        logging.error(f"Error saving preferences: {e}")
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_user_preferences', methods=['GET'])
+def get_user_preferences():
+    try:
+        user_name = request.args.get('name')
+        user = User.query.filter_by(name=user_name).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        preferences = UserRestaurantPreference.query.filter_by(user_id=user.id).all()
+        preference_list = [{"restaurant_id": p.restaurant_id, "preference": p.preference.value} for p in preferences]
+        return jsonify({"preferences": preference_list})
+
+    except Exception as e:
+        logging.error(f"Error fetching user preferences: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print('test')

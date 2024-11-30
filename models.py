@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Enum
+from sqlalchemy import Enum, DateTime
 import enum
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -19,7 +20,7 @@ class Restaurant(db.Model):
     cuisine_type = db.Column(db.String(50))
 
     def __repr__(self):
-        return f'<Restaurant {self.name}>'
+        return f'<Restaurant {self.name.lower()}>'
 
 class RequestType(enum.Enum):
     input = "input"
@@ -42,3 +43,20 @@ class RequestRestaurant(db.Model):
 
     def __repr__(self):
         return f'<RequestRestaurant {self.id}>'
+
+class PreferenceType(enum.Enum):
+    like = "like"
+    dislike = "dislike"
+    neutral = "neutral"
+
+class UserRestaurantPreference(db.Model):
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)
+    preference = db.Column(Enum(PreferenceType), nullable=False)
+    timestamp = db.Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'restaurant_id', name='_user_restaurant_uc'),)
+
+    def __repr__(self):
+        return f'<UserRestaurantPreference {self.user_id} {self.restaurant_id} {self.preference}>'
