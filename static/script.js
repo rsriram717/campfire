@@ -1,62 +1,58 @@
 // script.js
-document.getElementById('restaurant-form').addEventListener('submit', function(e) {
-    e.preventDefault();
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('restaurant-form');
+    const loadingIndicator = document.getElementById('loading');
+    const recommendationsOutput = document.getElementById('recommendations');
 
-    const name = document.getElementById('name').value.trim();
-    console.log("User name:", name);  // Debugging
-    
-    const restaurants = document.getElementById('restaurants').value.split(',').map(restaurant => {
-        return restaurant.replace(/^\d+\s*/, '').trim();
-    });
-    console.log("Input restaurants:", restaurants);  // Debugging
+    form.addEventListener('submit', async function(event) {
+        event.preventDefault(); // Prevent the default form submission
 
-    const city = document.getElementById('city').value.trim();
-    console.log("City:", city);  // Debugging
+        // Show loading indicator
+        loadingIndicator.style.display = 'block';
 
-    // Show the loading spinner
-    document.getElementById('loading').style.display = 'block';
+        // Gather form data
+        const name = document.getElementById('name').value;
+        const restaurants = [
+            document.getElementById('restaurant1').value,
+            document.getElementById('restaurant2').value,
+            document.getElementById('restaurant3').value,
+            document.getElementById('restaurant4').value,
+            document.getElementById('restaurant5').value
+        ].filter(Boolean); // Remove empty values
+        const city = document.getElementById('city').value;
 
-    // Clear previous recommendations
-    const recommendationsDiv = document.getElementById('recommendations');
-    recommendationsDiv.innerHTML = '';
-
-    // Send the input data to the Flask API
-    fetch('/get_recommendations', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            user: name,
-            input_restaurants: restaurants,
-            city: city
-        }),
-    })
-    .then(response => {
-        console.log("Response status:", response.status);  // Debugging
-        return response.json();
-    })
-    .then(data => {
-        console.log('Response from backend:', data); // Debugging
-
-        // Hide the loading spinner
-        document.getElementById('loading').style.display = 'none';
-
-        if (data.recommendations && data.recommendations.length > 0) {
-            data.recommendations.forEach(rec => {
-                const p = document.createElement('p');
-                const restaurantName = rec.name.replace(/\*/g, '').trim();
-                p.innerHTML = `<strong>${restaurantName}</strong>: ${rec.description}`;
-                recommendationsDiv.appendChild(p);
+        try {
+            const response = await fetch('/get_recommendations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user: name,
+                    input_restaurants: restaurants,
+                    city: city,
+                }),
             });
-        } else {
-            recommendationsDiv.innerHTML = '<p>No recommendations found.</p>';
+
+            const data = await response.json();
+            if (data.recommendations) {
+                recommendationsOutput.innerHTML = data.recommendations.map(rec => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary">${rec.name}</h5>
+                            <p class="card-text">${rec.description}</p>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                recommendationsOutput.innerHTML = `<p>No recommendations found.</p>`;
+            }
+        } catch (error) {
+            console.error('Error fetching recommendations:', error);
+            recommendationsOutput.innerHTML = `<p>Error fetching recommendations. Please try again later.</p>`;
+        } finally {
+            // Hide loading indicator
+            loadingIndicator.style.display = 'none';
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        document.getElementById('recommendations').innerHTML = '<p>Failed to load recommendations. Please try again.</p>';
-        // Hide the loading spinner
-        document.getElementById('loading').style.display = 'none';
     });
 });
