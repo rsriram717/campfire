@@ -57,6 +57,8 @@ def get_recommendations():
         input_restaurants = data['input_restaurants']
         city = data['city']
         
+        logging.debug(f"Received request for user: {user_name}, city: {city}, input restaurants: {input_restaurants}")
+
         # Check if the user already exists
         existing_user = User.query.filter_by(email=email).first()
         if not existing_user:
@@ -95,17 +97,25 @@ def get_recommendations():
 
         # Get recommendations from OpenAI
         recommended_restaurants = get_similar_restaurants(input_restaurants, city)
+        logging.debug(f"Recommended restaurants: {recommended_restaurants}")
 
         # Log recommended restaurants
         for rec in recommended_restaurants:
             recommended_restaurant = Restaurant.query.filter_by(name=rec['name']).first()
-            if recommended_restaurant:
-                request_restaurant = RequestRestaurant(
-                    user_request_id=new_user_request.id,
-                    restaurant_id=recommended_restaurant.id,
-                    type=RequestType.recommendation
-                )
-                db.session.add(request_restaurant)
+            if not recommended_restaurant:
+                # Add the recommended restaurant to the database if it doesn't exist
+                logging.debug(f"Adding recommended restaurant: {rec['name']} in {city}")
+                recommended_restaurant = Restaurant(name=rec['name'], location=city, cuisine_type=None)
+                db.session.add(recommended_restaurant)
+                db.session.commit()
+
+            # Now add to request_restaurant
+            request_restaurant = RequestRestaurant(
+                user_request_id=new_user_request.id,
+                restaurant_id=recommended_restaurant.id,
+                type=RequestType.recommendation
+            )
+            db.session.add(request_restaurant)
 
         db.session.commit()
 
@@ -113,6 +123,7 @@ def get_recommendations():
         return jsonify({"recommendations": recommended_restaurants})
 
     except Exception as e:
+        logging.error(f"Error in get_recommendations: {e}")
         db.session.rollback()
         return jsonify({"error": str(e)})
 
