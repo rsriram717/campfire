@@ -71,7 +71,11 @@ def get_recommendations():
         for restaurant_name in input_restaurants:
             restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
             if not restaurant:
-                new_restaurant = Restaurant(name=restaurant_name)
+                # Log the restaurant name and city for debugging
+                logging.debug(f"Adding new restaurant: {restaurant_name} in {city}")
+                
+                # Use the city as the location if no specific location is provided
+                new_restaurant = Restaurant(name=restaurant_name, location=city, cuisine_type=None)
                 db.session.add(new_restaurant)
                 db.session.commit()
                 restaurant = new_restaurant
@@ -83,7 +87,8 @@ def get_recommendations():
             for rec in recommended_restaurants:
                 recommended_restaurant = Restaurant.query.filter_by(name=rec['name']).first()
                 if not recommended_restaurant:
-                    new_recommended_restaurant = Restaurant(name=rec['name'])
+                    # Use the city as the location for recommended restaurants
+                    new_recommended_restaurant = Restaurant(name=rec['name'], location=city, cuisine_type=None)
                     db.session.add(new_recommended_restaurant)
                     db.session.commit()
                     recommended_restaurant = new_recommended_restaurant

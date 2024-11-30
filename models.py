@@ -13,7 +13,7 @@ class User(db.Model):
 class Restaurant(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
-    location = db.Column(db.String(100))
+    location = db.Column(db.String(100), nullable=False)
     cuisine_type = db.Column(db.String(50))
 
     def __repr__(self):
