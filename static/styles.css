@@ -29,3 +29,103 @@ body {
     background-color: #e9ecef;
     border-radius: 5px;
 }
+
+.preference-btn.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-group {
+    width: 100%;
+}
+
+.btn-group .btn {
+    flex: 1;
+}
+
+.custom-checkbox {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  background-color: #fff;
+  border: 2px solid #e8e8e8;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.custom-checkbox input {
+  visibility: hidden;
+  display: none;
+}
+
+.custom-checkbox .checkmark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  width: 12px;
+  height: 12px;
+  background-color: #4CAF50;
+  border-radius: 2px;
+  transition: all 0.3s;
+}
+
+.custom-checkbox input:checked ~ .checkmark {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.preference-container {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin-left: 2rem;
+}
+
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox-label {
+  font-size: 0.9rem;
+  color: #333;
+  user-select: none;
+}
+
+.preference-toggle {
+    display: inline-flex;
+    background: #e9ecef;
+    border-radius: 25px;
+    padding: 3px;
+    gap: 3px;
+}
+
+.preference-toggle button {
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: transparent;
+}
+
+.preference-toggle button.active {
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.preference-toggle button.like.active {
+    color: #28a745;
+}
+
+.preference-toggle button.dislike.active {
+    color: #dc3545;
+}
+
+.preference-toggle button.neutral.active {
+    color: #6c757d;
+}

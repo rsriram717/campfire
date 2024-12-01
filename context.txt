@@ -55,3 +55,52 @@ This entity will evolve to track user behavior, helping refine recommendations.
 Recommendation:
 Stores historical recommendations provided to users or user groups.
 Tracks which restaurants were suggested for analysis and improving the algorithm.
+
+# Restaurant Preferences Tab
+
+The Restaurant Preferences tab allows users to set their preferences for restaurants in the system. Here's how it works:
+
+1. User Interface:
+   - Users enter their name in a text field
+   - "Show Restaurants" button becomes blue and clickable only when name is entered
+   - Each restaurant has a three-state toggle: Like/Neutral/Dislike
+   - A "Save Preferences" button appears after restaurants are loaded
+
+2. Loading Preferences:
+   - When user clicks "Show Restaurants":
+     * All restaurants are initially set to "neutral" state
+     * System loads any existing preferences from database
+     * Toggle buttons are updated to reflect stored preferences
+
+3. User Interactions:
+   - Users can click any of the three states for each restaurant
+   - Only one state can be active at a time
+   - Multiple restaurants can be updated before saving
+   - Visual feedback: Like (green), Dislike (red), Neutral (gray)
+
+4. Saving Preferences:
+   - Only changed preferences are sent to the database
+   - Any preference change (including to neutral) is stored
+   - Restaurants that have never been interacted with have no database record
+   - The Save button only appears when there are unsaved changes
+
+5. Database Storage:
+   - UserRestaurantPreference table stores all user-restaurant interactions
+   - Stores Like/Dislike/Neutral preferences for any restaurant the user has interacted with
+   - No record exists for restaurants the user has never interacted with
+   - Each preference includes a timestamp for tracking changes
+
+6. Backend Implementation:
+   - Preferences are stored in UserRestaurantPreference table
+   - Each record contains: user_id, restaurant_id, preference (enum), timestamp
+   - PreferenceType enum includes: like, dislike, neutral
+   - All preference changes are stored, including changes to neutral
+   - Timestamps are updated whenever preferences change
+   - GET /get_user_preferences:
+     * Fetches all preferences for a given user
+     * Returns array of {restaurant_id, preference} objects
+   - POST /save_preferences:
+     * Accepts array of changed preferences
+     * Updates existing records or creates new ones
+     * Updates timestamps for tracking preference history
+     * Only processes preferences that have changed from current state

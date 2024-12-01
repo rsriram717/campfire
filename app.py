@@ -147,34 +147,51 @@ def save_preferences():
         data = request.json
         user_name = data['user_name']
         preferences = data['preferences']
+        
+        logging.debug(f"Received preferences for user {user_name}: {preferences}")
 
         user = User.query.filter_by(name=user_name).first()
         if not user:
+            logging.error(f"User not found: {user_name}")
             return jsonify({"error": "User not found"}), 404
 
+        # Get all existing preferences for this user
+        existing_preferences = UserRestaurantPreference.query.filter_by(user_id=user.id).all()
+        existing_pref_map = {pref.restaurant_id: pref for pref in existing_preferences}
+
+        # Process incoming preferences
         for pref in preferences:
             restaurant_id = pref['restaurant_id']
-            preference_type = pref['preference']
+            preference_type = pref['preference'].lower()
+            
+            logging.debug(f"Processing preference: restaurant_id={restaurant_id}, type={preference_type}")
 
-            existing_pref = UserRestaurantPreference.query.filter_by(
-                user_id=user.id,
-                restaurant_id=restaurant_id
-            ).first()
-
-            if existing_pref:
-                if existing_pref.preference != preference_type:
-                    existing_pref.preference = preference_type
+            try:
+                pref_enum = PreferenceType[preference_type]
+                
+                if restaurant_id in existing_pref_map:
+                    # Update existing preference
+                    existing_pref = existing_pref_map[restaurant_id]
+                    existing_pref.preference = pref_enum
                     existing_pref.timestamp = datetime.utcnow()
-            else:
-                new_pref = UserRestaurantPreference(
-                    user_id=user.id,
-                    restaurant_id=restaurant_id,
-                    preference=preference_type,
-                    timestamp=datetime.utcnow()
-                )
-                db.session.add(new_pref)
+                    logging.debug(f"Updated existing preference to {pref_enum}")
+                else:
+                    # Create new preference
+                    new_pref = UserRestaurantPreference(
+                        user_id=user.id,
+                        restaurant_id=restaurant_id,
+                        preference=pref_enum,
+                        timestamp=datetime.utcnow()
+                    )
+                    db.session.add(new_pref)
+                    logging.debug(f"Created new preference: {pref_enum}")
+
+            except KeyError as e:
+                logging.error(f"Invalid preference type: {preference_type}")
+                return jsonify({"error": f"Invalid preference type: {preference_type}"}), 400
 
         db.session.commit()
+        logging.debug("Successfully saved all preferences")
         return jsonify({"success": True})
 
     except Exception as e:
@@ -186,12 +203,24 @@ def save_preferences():
 def get_user_preferences():
     try:
         user_name = request.args.get('name')
+        logging.debug(f"Fetching preferences for user: {user_name}")
+
         user = User.query.filter_by(name=user_name).first()
         if not user:
+            logging.error(f"User not found: {user_name}")
             return jsonify({"error": "User not found"}), 404
 
         preferences = UserRestaurantPreference.query.filter_by(user_id=user.id).all()
-        preference_list = [{"restaurant_id": p.restaurant_id, "preference": p.preference.value} for p in preferences]
+        preference_list = []
+        
+        for p in preferences:
+            logging.debug(f"Found preference: restaurant_id={p.restaurant_id}, preference={p.preference}")
+            preference_list.append({
+                "restaurant_id": p.restaurant_id, 
+                "preference": p.preference.value  # Convert enum to string value
+            })
+            
+        logging.debug(f"Returning preferences: {preference_list}")
         return jsonify({"preferences": preference_list})
 
     except Exception as e:
