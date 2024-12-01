@@ -60,6 +60,7 @@ def get_recommendations():
         
         logging.debug(f"Received request for user: {user_name}, city: {city}, input restaurants: {input_restaurants}")
         
+        # Get or create user
         existing_user = User.query.filter_by(name=user_name).first()
         if not existing_user:
             new_user = User(name=user_name, email=email)
@@ -68,11 +69,14 @@ def get_recommendations():
         else:
             new_user = existing_user
             db.session.add(new_user)
+
+        # Create user request
         new_user_request = UserRequest(user_id=new_user.id, city=city)
         db.session.add(new_user_request)
         db.session.commit()
 
         for restaurant_name in input_restaurants:
+            # Get or create restaurant
             restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
             if not restaurant:
                 logging.debug(f"Adding new restaurant: {restaurant_name} in {city}")
@@ -80,6 +84,8 @@ def get_recommendations():
                 db.session.add(new_restaurant)
                 db.session.commit()
                 restaurant = new_restaurant
+
+            # Add to request restaurants
             request_restaurant = RequestRestaurant(
                 user_request_id=new_user_request.id,
                 restaurant_id=restaurant.id,
@@ -95,7 +101,7 @@ def get_recommendations():
             ).first()
 
             if user_pref:
-                if user_pref.preference == PreferenceType.dislike:
+                if user_pref.preference != PreferenceType.like:
                     user_pref.preference = PreferenceType.like
                     user_pref.timestamp = datetime.utcnow()
             else:
