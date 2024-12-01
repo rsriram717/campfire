@@ -53,21 +53,21 @@ def index():
 def get_recommendations():
     try:
         data = request.json
-        user_name = data['user']
+        user_name = data['user'].lower()
         email = "test@test.com"
         input_restaurants = data['input_restaurants']
         city = data['city']
         
         logging.debug(f"Received request for user: {user_name}, city: {city}, input restaurants: {input_restaurants}")
-
-        existing_user = User.query.filter_by(email=email).first()
+        
+        existing_user = User.query.filter_by(name=user_name).first()
         if not existing_user:
             new_user = User(name=user_name, email=email)
             db.session.add(new_user)
             db.session.commit()
         else:
             new_user = existing_user
-
+            db.session.add(new_user)
         new_user_request = UserRequest(user_id=new_user.id, city=city)
         db.session.add(new_user_request)
         db.session.commit()
@@ -80,35 +80,37 @@ def get_recommendations():
                 db.session.add(new_restaurant)
                 db.session.commit()
                 restaurant = new_restaurant
-
             request_restaurant = RequestRestaurant(
                 user_request_id=new_user_request.id,
                 restaurant_id=restaurant.id,
                 type=RequestType.input
             )
             db.session.add(request_restaurant)
+            db.session.commit()
+
+            # Update or add user preference to "Liked"
+            user_pref = UserRestaurantPreference.query.filter_by(
+                user_id=new_user.id,
+                restaurant_id=restaurant.id
+            ).first()
+
+            if user_pref:
+                if user_pref.preference == PreferenceType.dislike:
+                    user_pref.preference = PreferenceType.like
+                    user_pref.timestamp = datetime.utcnow()
+            else:
+                new_pref = UserRestaurantPreference(
+                    user_id=new_user.id,
+                    restaurant_id=restaurant.id,
+                    preference=PreferenceType.like,
+                    timestamp=datetime.utcnow()
+                )
+                db.session.add(new_pref)
+            db.session.commit()
 
         recommended_restaurants = get_similar_restaurants(input_restaurants, city)
         logging.debug(f"Recommended restaurants: {recommended_restaurants}")
 
-        for rec in recommended_restaurants:
-            recommended_restaurant = Restaurant.query.filter_by(name=rec['name']).first()
-            if not recommended_restaurant:
-                logging.debug(f"Adding recommended restaurant: {rec['name']} in {city}")
-                recommended_restaurant = Restaurant(name=rec['name'], location=city, cuisine_type=None)
-                db.session.add(recommended_restaurant)
-                db.session.commit()
-
-            request_restaurant = RequestRestaurant(
-                user_request_id=new_user_request.id,
-                restaurant_id=recommended_restaurant.id,
-                type=RequestType.recommendation
-            )
-            db.session.add(request_restaurant)
-
-        db.session.commit()
-
-        logging.debug(f"\n\n\nRecommended restaurants: {recommended_restaurants}")
         return jsonify({"recommendations": recommended_restaurants})
 
     except Exception as e:
@@ -194,6 +196,31 @@ def get_user_preferences():
 
     except Exception as e:
         logging.error(f"Error fetching user preferences: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/update_user', methods=['POST'])
+def update_user():
+    try:
+        data = request.json
+        user_id = data['user_id']
+        new_name = data.get('name')
+        new_email = data.get('email')
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        if new_name:
+            user.name = new_name
+        if new_email:
+            user.email = new_email
+
+        db.session.commit()
+        return jsonify({"success": True})
+
+    except Exception as e:
+        logging.error(f"Error updating user: {e}")
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
