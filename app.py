@@ -75,6 +75,7 @@ def get_recommendations():
         db.session.add(new_user_request)
         db.session.commit()
 
+        # Process input restaurants and get user preferences
         for restaurant_name in input_restaurants:
             # Get or create restaurant
             restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
@@ -114,7 +115,27 @@ def get_recommendations():
                 db.session.add(new_pref)
             db.session.commit()
 
-        recommended_restaurants = get_similar_restaurants(input_restaurants, city)
+        # Get user's restaurant preferences
+        user_preferences = UserRestaurantPreference.query.filter_by(user_id=new_user.id).join(
+            Restaurant
+        ).with_entities(
+            Restaurant.name,
+            UserRestaurantPreference.preference,
+            UserRestaurantPreference.timestamp
+        ).all()
+
+        # Organize preferences
+        liked_restaurants = [rest.name for rest in user_preferences if rest.preference == PreferenceType.like]
+        disliked_restaurants = [rest.name for rest in user_preferences if rest.preference == PreferenceType.dislike]
+
+        # Add input restaurants to liked restaurants if not already present
+        liked_restaurants.extend([r for r in input_restaurants if r not in liked_restaurants])
+
+        recommended_restaurants = get_similar_restaurants(
+            liked_restaurants=liked_restaurants,
+            disliked_restaurants=disliked_restaurants,
+            city=city
+        )
         logging.debug(f"Recommended restaurants: {recommended_restaurants}")
 
         return jsonify({"recommendations": recommended_restaurants})

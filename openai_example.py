@@ -2,17 +2,40 @@ import os
 import openai
 import re
 import logging
+from pathlib import Path
 
 # Load API key from environment variable
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def get_similar_restaurants(input_restaurants, city, num_recommendations=3):
+# Constants
+NUM_RECOMMENDATIONS = 3
+
+def load_prompt_template():
+    prompt_path = Path(__file__).parent / 'prompt.txt'
+    with open(prompt_path, 'r') as file:
+        return file.read()
+
+def get_similar_restaurants(liked_restaurants, disliked_restaurants, city):
     logging.debug("Constructing prompt for GPT-4.")
-    prompt = (
-        f"Recommend {num_recommendations} restaurants similar to the following: "
-        f"{', '.join(input_restaurants)} in {city}. "
-        f"List the responses as <name> - <2-3 short phrases of why it would be a good fit>"
-        f"Do not number the responses"
+    
+    # Load the prompt template
+    prompt_template = load_prompt_template()
+    
+    # Format the liked restaurants list
+    liked_restaurants_formatted = '\n'.join(f'- {restaurant}' for restaurant in liked_restaurants)
+    
+    # Format the disliked restaurants section if it exists
+    disliked_section = ""
+    if disliked_restaurants:
+        disliked_formatted = '\n'.join(f'- {restaurant}' for restaurant in disliked_restaurants)
+        disliked_section = f"Disliked Restaurants (please avoid similar places):\n{disliked_formatted}\n\n"
+    
+    # Fill in the template
+    prompt = prompt_template.format(
+        city=city,
+        liked_restaurants=liked_restaurants_formatted,
+        disliked_section=disliked_section,
+        num_recommendations=NUM_RECOMMENDATIONS
     )
 
     try:
