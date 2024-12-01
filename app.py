@@ -138,6 +138,27 @@ def get_recommendations():
         )
         logging.debug(f"Recommended restaurants: {recommended_restaurants}")
 
+        # Store recommended restaurants in database
+        for rec in recommended_restaurants:
+            restaurant_name = rec['name']
+            # Get or create restaurant
+            restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
+            if not restaurant:
+                logging.debug(f"Adding new recommended restaurant: {restaurant_name} in {city}")
+                new_restaurant = Restaurant(name=restaurant_name, location=city, cuisine_type=None)
+                db.session.add(new_restaurant)
+                db.session.commit()
+                restaurant = new_restaurant
+
+            # Link recommendation to user request
+            request_restaurant = RequestRestaurant(
+                user_request_id=new_user_request.id,
+                restaurant_id=restaurant.id,
+                type=RequestType.recommendation
+            )
+            db.session.add(request_restaurant)
+            db.session.commit()
+
         return jsonify({"recommendations": recommended_restaurants})
 
     except Exception as e:

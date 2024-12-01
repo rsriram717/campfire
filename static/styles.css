@@ -1,6 +1,18 @@
+:root {
+    --campfire-red: #B85042;
+    --campfire-orange: #E09F3E;
+    --campfire-yellow: #DDB892;
+    --campfire-dark: #2C1810;
+    --campfire-bg: #FFF5EB;
+}
+
 body {
     font-family: Arial, sans-serif;
-    background-color: #f8f9fa;
+    background-color: var(--campfire-bg);
+}
+
+header.bg-primary {
+    background: linear-gradient(135deg, var(--campfire-dark), var(--campfire-red)) !important;
 }
 
 .uiverse-input, .uiverse-select {
@@ -14,19 +26,19 @@ body {
 }
 
 .uiverse-input:focus, .uiverse-select:focus {
-    border-color: #007bff;
+    border-color: var(--campfire-orange);
     outline: none;
 }
 
 .loading {
     text-align: center;
     font-size: 18px;
-    color: #007bff;
+    color: var(--campfire-red);
 }
 
 .recommendations-output {
     padding: 10px;
-    background-color: #e9ecef;
+    background-color: rgba(221, 184, 146, 0.2);
     border-radius: 5px;
 }
 
@@ -97,7 +109,7 @@ body {
 
 .preference-toggle {
     display: inline-flex;
-    background: #e9ecef;
+    background: rgba(224, 159, 62, 0.1);
     border-radius: 25px;
     padding: 3px;
     gap: 3px;
@@ -114,18 +126,74 @@ body {
 }
 
 .preference-toggle button.active {
-    background: #fff;
+    background: white;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .preference-toggle button.like.active {
-    color: #28a745;
+    color: var(--campfire-orange);
 }
 
 .preference-toggle button.dislike.active {
-    color: #dc3545;
+    color: var(--campfire-red);
 }
 
 .preference-toggle button.neutral.active {
-    color: #6c757d;
+    color: var(--campfire-dark);
+}
+
+header h1 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+header .subtitle {
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    max-width: 600px;
+    margin: 0 auto;
+    padding-top: 0.75rem;
+}
+
+header .subtitle p {
+    margin: 0;
+    font-size: 1.1rem;
+    font-style: italic;
+}
+
+.btn-primary {
+    background-color: var(--campfire-orange) !important;
+    border-color: var(--campfire-orange) !important;
+}
+
+.btn-primary:hover {
+    background-color: var(--campfire-red) !important;
+    border-color: var(--campfire-red) !important;
+}
+
+.btn-secondary {
+    background-color: var(--campfire-dark) !important;
+    border-color: var(--campfire-dark) !important;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--campfire-red) !important;
+    border-color: var(--campfire-orange) var(--campfire-orange) #fff !important;
+}
+
+.nav-tabs .nav-link:not(.active) {
+    color: var(--campfire-dark) !important;
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+    border-color: var(--campfire-yellow);
+}
+
+.card {
+    border-color: var(--campfire-yellow);
+    background-color: #FFF9F1;
+}
+
+.card-title {
+    color: var(--campfire-red) !important;
 }
