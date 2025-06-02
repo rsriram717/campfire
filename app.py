@@ -14,11 +14,6 @@ from sqlalchemy import Enum, DateTime
 
 load_dotenv()
 
-# Add the PYTHONPATH to sys.path
-python_path = os.getenv("PYTHONPATH")
-if python_path and python_path not in sys.path:
-    sys.path.append(python_path)
-
 from openai_example import get_similar_restaurants, sanitize_name
 from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType, UserRestaurantPreference, PreferenceType
 
@@ -30,7 +25,7 @@ if not os.getenv("OPENAI_API_KEY"):
 app = Flask(__name__)
 
 # Configure SQLite database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:/Users/Rishi Sriram/Documents/personal/campfire/restaurant_recommendations.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///restaurant_recommendations.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SQLAlchemy
@@ -42,8 +37,12 @@ migrate = Migrate(app, db)
 # Load GPT-4 API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Set up basic logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Set up logging with configurable level
+log_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.DEBUG),
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 @app.route('/')
 def index():
@@ -54,7 +53,7 @@ def get_recommendations():
     try:
         data = request.json
         user_name = data['user'].lower()
-        email = "test@test.com"
+        email = os.getenv('DEFAULT_USER_EMAIL', 'user@example.com')
         input_restaurants = data['input_restaurants']
         city = data['city']
         
@@ -301,5 +300,9 @@ def update_user():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    print('test')
-    app.run(debug=True)
+    debug_mode = os.getenv('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
+    port = int(os.getenv('FLASK_PORT', 5000))
+    host = os.getenv('FLASK_HOST', '127.0.0.1')
+    
+    print(f'Starting Campfire application on {host}:{port} (debug={debug_mode})')
+    app.run(debug=debug_mode, host=host, port=port)
