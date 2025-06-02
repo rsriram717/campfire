@@ -1,14 +1,18 @@
 import os
-import openai
+from openai import OpenAI
 import re
 import logging
 from pathlib import Path
 
-# Load API key from environment variable
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
 # Constants
 NUM_RECOMMENDATIONS = 3
+
+def get_openai_client():
+    """Get OpenAI client instance with API key from environment variable"""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is not set.")
+    return OpenAI(api_key=api_key)
 
 def load_prompt_template():
     prompt_path = Path(__file__).parent / 'prompt.txt'
@@ -40,7 +44,8 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city):
 
     try:
         logging.debug("Sending request to GPT-4 API.")
-        response = openai.chat.completions.create(
+        client = get_openai_client()
+        response = client.chat.completions.create(
             model="gpt-4o-mini",  # Specify GPT-4 model
             messages=[{"role": "user", "content": prompt}],
             max_tokens=150  # Limit the response length
@@ -70,9 +75,14 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city):
 
 def check_api_key():
     try:
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        print(openai.api_key)
-        print("API key is valid.")
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            print("API key is loaded from environment.")
+            # Test with a simple API call
+            client = get_openai_client()
+            print("OpenAI client initialized successfully.")
+        else:
+            print("OPENAI_API_KEY environment variable is not set.")
     except Exception as e:
         print(f"Error: {e}")
         print("API key may not be valid or there's a connection issue.")

@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
-import openai
 import os
 from flask_migrate import Migrate
 from dotenv import load_dotenv
@@ -33,9 +32,6 @@ db.init_app(app)
 
 # Initialize Flask-Migrate
 migrate = Migrate(app, db)
-
-# Load GPT-4 API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Set up logging with configurable level
 log_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()
