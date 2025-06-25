@@ -19,8 +19,8 @@ load_dotenv()
 from openai_example import get_similar_restaurants, sanitize_name
 from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType, UserRestaurantPreference, PreferenceType
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize Flask app, explicitly setting a writable instance path for Vercel
+app = Flask(__name__, instance_path='/tmp/instance')
 
 # Configure SQLite database to use the /tmp directory for Vercel's writable filesystem
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:////tmp/restaurant_recommendations.db')
