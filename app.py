@@ -19,10 +19,6 @@ load_dotenv()
 from openai_example import get_similar_restaurants, sanitize_name
 from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType, UserRestaurantPreference, PreferenceType
 
-# Check if the OPENAI_API_KEY environment variable is set
-if not os.getenv("OPENAI_API_KEY"):
-    raise ValueError("OPENAI_API_KEY environment variable is not set.")
-
 # Initialize Flask app
 app = Flask(__name__)
 
