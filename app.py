@@ -22,8 +22,8 @@ from models import db, User, Restaurant, UserRequest, RequestRestaurant, Request
 # Initialize Flask app
 app = Flask(__name__)
 
-# Configure SQLite database
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///restaurant_recommendations.db')
+# Configure SQLite database to use the /tmp directory for Vercel's writable filesystem
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:////tmp/restaurant_recommendations.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SQLAlchemy
