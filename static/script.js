@@ -73,7 +73,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const newInputGroupHTML = `
             <div class="restaurant-input-group mt-2">
-                <input type="text" name="restaurant_name" placeholder="Start typing a restaurant name..." class="form-control awesomplete">
+                <div class="awesomplete">
+                    <input type="text" name="restaurant_name" placeholder="Start typing a restaurant name..." class="form-control">
+                </div>
                 <input type="hidden" name="place_id">
                 <button type="button" class="btn btn-danger remove-restaurant-btn">
                     <i class="bi bi-x-circle"></i>
@@ -81,8 +83,9 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>`;
         restaurantInputsContainer.insertAdjacentHTML('beforeend', newInputGroupHTML);
         
-        const newInputs = restaurantInputsContainer.querySelectorAll('.awesomplete');
-        const latestInput = newInputs[newInputs.length - 1];
+        const newInputGroups = restaurantInputsContainer.querySelectorAll('.restaurant-input-group');
+        const latestInputGroup = newInputGroups[newInputGroups.length - 1];
+        const latestInput = latestInputGroup.querySelector('input[name="restaurant_name"]');
         initializeAutocomplete(latestInput);
         
         updateAddButtonState();
@@ -97,10 +100,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Initialize for ALL existing inputs on page load
-    document.querySelectorAll('.awesomplete').forEach(input => {
-        initializeAutocomplete(input);
-    });
+    // Initialize for the first input, which is now pre-wrapped
+    const firstInput = document.querySelector('#restaurant-inputs input[name="restaurant_name"]');
+    if (firstInput) {
+        initializeAutocomplete(firstInput);
+    }
+    
     updateAddButtonState();
     updateRemoveButtons(); // Call on load to set initial state
 
