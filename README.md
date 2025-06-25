@@ -30,13 +30,9 @@ Campfire is an intelligent restaurant recommendation system that leverages OpenA
 - **Database Migrations**: Flask-Migrate with Alembic
 
 ### Database Schema
-The application uses 5 main tables:
+The application uses 5 main tables to store user data, restaurant information, and preferences.
 
-1. **Users** - User account information (name, email)
-2. **Restaurants** - Restaurant catalog (name, location, cuisine type)
-3. **User Requests** - Recommendation request history (user, city, timestamp)
-4. **Request Restaurants** - Links restaurants to requests (input vs recommendation)
-5. **User Restaurant Preferences** - Preference tracking (like/dislike/neutral with timestamps)
+A detailed breakdown of the database schema, including an Entity-Relationship Diagram, is available in the [Database Documentation](./docs/database.md).
 
 ### AI Recommendation Engine
 The recommendation system works by:
