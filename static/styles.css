@@ -197,3 +197,36 @@ header .subtitle p {
 .card-title {
     color: var(--campfire-red) !important;
 }
+
+.restaurant-input-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+/* Target the wrapper div that Awesomplete creates */
+.restaurant-input-group div.awesomplete {
+    flex-grow: 1; /* Make the library's container take up the space */
+}
+
+/* Ensure the actual input field inside it is also full-width */
+.restaurant-input-group div.awesomplete > input {
+    width: 100%;
+}
+
+.remove-restaurant-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-size: 1.2rem;
+    padding: 0;
+    line-height: 1;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.remove-restaurant-btn:hover {
+    opacity: 1;
+    color: #a71d2a;
+}

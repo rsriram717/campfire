@@ -3,32 +3,133 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('restaurant-form');
     const loadingIndicator = document.getElementById('loading');
     const recommendationsOutput = document.getElementById('recommendations-output');
+    const addRestaurantBtn = document.getElementById('add-restaurant-btn');
+    const restaurantInputsContainer = document.getElementById('restaurant-inputs');
 
     let currentPreferences = new Map(); // Store current DB state of preferences
 
+    // --- Autocomplete and Dynamic Inputs ---
+
+    const MAX_RESTAURANTS = 5;
+
+    function updateRemoveButtons() {
+        const groups = restaurantInputsContainer.querySelectorAll('.restaurant-input-group');
+        groups.forEach((group, index) => {
+            const button = group.querySelector('.remove-restaurant-btn');
+            if (button) {
+                // Show button only if there is more than one input, or hide if it's the last one
+                button.style.display = groups.length > 1 ? 'inline-block' : 'none';
+            }
+        });
+    }
+
+    function initializeAutocomplete(inputElement) {
+        console.log("Initializing autocomplete for:", inputElement); // Diagnostic log
+        const awesomplete = new Awesomplete(inputElement, {
+            minChars: 2,
+            autoFirst: true,
+        });
+
+        inputElement.addEventListener('keyup', function(event) {
+            const query = inputElement.value;
+            const city = document.getElementById('city').value;
+            if (query.length < 2) return;
+
+            fetch(`/autocomplete?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        // For 500 errors, etc., the response body might have our specific error message
+                        return response.json().then(err => Promise.reject(err));
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    awesomplete.list = data.map(r => ({ label: `${r.name} (${r.address})`, value: r.place_id }));
+                })
+                .catch(error => {
+                    console.error('Autocomplete Error:', error.error || 'A network or server error occurred.');
+                    awesomplete.list = []; // Clear suggestions on error
+                });
+        });
+
+        inputElement.addEventListener('awesomplete-selectcomplete', function(event) {
+            const { label, value } = event.text;
+            const placeId = value;
+            const name = label.split(' (')[0];
+
+            this.value = name; // Set visible input to just the name
+            this.closest('.restaurant-input-group').querySelector('input[name="place_id"]').value = placeId;
+        });
+    }
+
+    function updateAddButtonState() {
+        const count = restaurantInputsContainer.querySelectorAll('.restaurant-input-group').length;
+        addRestaurantBtn.disabled = count >= MAX_RESTAURANTS;
+    }
+
+    addRestaurantBtn.addEventListener('click', function() {
+        const count = restaurantInputsContainer.querySelectorAll('.restaurant-input-group').length;
+        if (count >= MAX_RESTAURANTS) return;
+
+        const newInputGroupHTML = `
+            <div class="restaurant-input-group mt-2">
+                <input type="text" name="restaurant_name" placeholder="Start typing a restaurant name..." class="form-control awesomplete">
+                <input type="hidden" name="place_id">
+                <button type="button" class="btn btn-danger remove-restaurant-btn">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+            </div>`;
+        restaurantInputsContainer.insertAdjacentHTML('beforeend', newInputGroupHTML);
+        
+        const newInputs = restaurantInputsContainer.querySelectorAll('.awesomplete');
+        const latestInput = newInputs[newInputs.length - 1];
+        initializeAutocomplete(latestInput);
+        
+        updateAddButtonState();
+        updateRemoveButtons();
+    });
+    
+    restaurantInputsContainer.addEventListener('click', function(event) {
+        if (event.target.classList.contains('remove-restaurant-btn')) {
+            event.target.closest('.restaurant-input-group').remove();
+            updateAddButtonState();
+            updateRemoveButtons();
+        }
+    });
+
+    // Initialize for ALL existing inputs on page load
+    document.querySelectorAll('.awesomplete').forEach(input => {
+        initializeAutocomplete(input);
+    });
+    updateAddButtonState();
+    updateRemoveButtons(); // Call on load to set initial state
+
+    // --- Form Submission ---
+
     form.addEventListener('submit', function(event) {
         event.preventDefault();
-
         loadingIndicator.style.display = 'block';
 
         const name = document.getElementById('name').value;
-        const restaurants = [
-            document.getElementById('restaurant1').value,
-            document.getElementById('restaurant2').value,
-            document.getElementById('restaurant3').value,
-            document.getElementById('restaurant4').value,
-            document.getElementById('restaurant5').value
-        ].filter(Boolean);
         const city = document.getElementById('city').value;
+        
+        const placeIds = [...restaurantInputsContainer.querySelectorAll('input[name="place_id"]')]
+            .map(input => input.value)
+            .filter(Boolean); // Filter out empty ones
+
+        // Fallback for names if place_id is not selected
+        const restaurantNames = [...restaurantInputsContainer.querySelectorAll('input[name="restaurant_name"]')]
+            .map((input, index) => ({ name: input.value, placeId: placeIds[index] }))
+            .filter(item => item.name && !item.placeId)
+            .map(item => item.name);
 
         fetch('/get_recommendations', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 user: name,
-                input_restaurants: restaurants,
+                place_ids: placeIds,
+                input_restaurants: restaurantNames, // Send names for ones without a place_id
                 city: city,
             }),
         })

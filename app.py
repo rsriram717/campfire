@@ -11,6 +11,9 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Enum, DateTime
 
+from services import places_service
+from utils import generate_slug
+
 load_dotenv()
 
 from openai_example import get_similar_restaurants, sanitize_name
@@ -50,116 +53,152 @@ def get_recommendations():
         data = request.json
         user_name = data['user'].lower()
         email = os.getenv('DEFAULT_USER_EMAIL', 'user@example.com')
-        input_restaurants = data['input_restaurants']
+        place_ids = data.get('place_ids', [])
+        input_restaurant_names = data.get('input_restaurants', [])
         city = data['city']
         
-        logging.debug(f"Received request for user: {user_name}, city: {city}, input restaurants: {input_restaurants}")
+        logging.debug(f"Request: user='{user_name}', city='{city}', place_ids={place_ids}, names={input_restaurant_names}")
         
         # Get or create user
-        existing_user = User.query.filter_by(name=user_name).first()
-        if not existing_user:
-            new_user = User(name=user_name, email=email)
-            db.session.add(new_user)
-            db.session.commit()
-        else:
-            new_user = existing_user
-            db.session.add(new_user)
+        user = User.query.filter_by(name=user_name).first()
+        if not user:
+            user = User(name=user_name, email=email)
+            db.session.add(user)
+            db.session.flush()
 
-        # Create user request
-        new_user_request = UserRequest(user_id=new_user.id, city=city)
-        db.session.add(new_user_request)
-        db.session.commit()
+        user_request = UserRequest(user_id=user.id, city=city)
+        db.session.add(user_request)
 
-        # Process input restaurants and get user preferences
-        for restaurant_name in input_restaurants:
-            # Get or create restaurant
-            restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
+        # Process and de-duplicate input restaurants
+        input_restaurants = []
+        processed_place_ids = set()
+
+        for place_id in place_ids:
+            if place_id in processed_place_ids:
+                continue # Skip duplicates from user input
+            
+            provider = os.getenv("PLACES_PROVIDER", "google")
+            restaurant = Restaurant.query.filter_by(provider=provider, place_id=place_id).first()
+            
             if not restaurant:
-                logging.debug(f"Adding new restaurant: {restaurant_name} in {city}")
-                new_restaurant = Restaurant(name=restaurant_name, location=city, cuisine_type=None)
-                db.session.add(new_restaurant)
-                db.session.commit()
-                restaurant = new_restaurant
+                details = places_service.get_details(place_id)
+                if not details or not details.get('name'):
+                    logging.warning(f"Could not fetch valid details for place_id: {place_id}. Skipping.")
+                    continue
 
-            # Add to request restaurants
-            request_restaurant = RequestRestaurant(
-                user_request_id=new_user_request.id,
+                # Final check to prevent race conditions or slug collisions
+                slug = generate_slug(details['name'], city)
+                existing_by_slug = Restaurant.query.filter_by(slug=slug).first()
+                if existing_by_slug:
+                    restaurant = existing_by_slug
+                else:
+                    restaurant = Restaurant(
+                        name=details['name'],
+                        location=details.get('address', 'Unknown'),
+                        cuisine_type=", ".join(details.get('categories', [])),
+                        provider=provider,
+                        place_id=place_id,
+                        slug=slug
+                    )
+                    db.session.add(restaurant)
+
+            if restaurant:
+                input_restaurants.append(restaurant)
+            processed_place_ids.add(place_id)
+
+        # Fallback for manually entered names
+        for name in input_restaurant_names:
+            # A more robust implementation might try to fuzzy match or find these via API
+            restaurant = Restaurant.query.filter(Restaurant.name.ilike(f'%{name}%')).first()
+            if not restaurant:
+                logging.debug(f"Creating fallback restaurant for name: {name}")
+                restaurant = Restaurant(
+                    name=name, 
+                    location=city, 
+                    provider='manual', 
+                    place_id=str(uuid.uuid4()), # Generate a random unique ID
+                    slug=generate_slug(name, city)
+                )
+                db.session.add(restaurant)
+            input_restaurants.append(restaurant)
+
+        # Flush to get IDs for new objects
+        db.session.flush()
+
+        # Associate input restaurants with the request and user preferences
+        for restaurant in input_restaurants:
+            # Link to request
+            req_rest = RequestRestaurant(
+                user_request_id=user_request.id,
                 restaurant_id=restaurant.id,
                 type=RequestType.input
             )
-            db.session.add(request_restaurant)
-            db.session.commit()
+            db.session.add(req_rest)
 
-            # Update or add user preference to "Liked"
-            user_pref = UserRestaurantPreference.query.filter_by(
-                user_id=new_user.id,
-                restaurant_id=restaurant.id
-            ).first()
-
+            # Set preference to 'like'
+            user_pref = UserRestaurantPreference.query.filter_by(user_id=user.id, restaurant_id=restaurant.id).first()
             if user_pref:
                 if user_pref.preference != PreferenceType.like:
                     user_pref.preference = PreferenceType.like
                     user_pref.timestamp = datetime.utcnow()
             else:
                 new_pref = UserRestaurantPreference(
-                    user_id=new_user.id,
+                    user_id=user.id,
                     restaurant_id=restaurant.id,
                     preference=PreferenceType.like,
                     timestamp=datetime.utcnow()
                 )
                 db.session.add(new_pref)
-            db.session.commit()
+        
+        db.session.commit() # Commit all transaction changes
 
-        # Get user's restaurant preferences
-        user_preferences = UserRestaurantPreference.query.filter_by(user_id=new_user.id).join(
-            Restaurant
-        ).with_entities(
-            Restaurant.name,
-            UserRestaurantPreference.preference,
-            UserRestaurantPreference.timestamp
-        ).all()
-
-        # Organize preferences
-        liked_restaurants = [rest.name for rest in user_preferences if rest.preference == PreferenceType.like]
-        disliked_restaurants = [rest.name for rest in user_preferences if rest.preference == PreferenceType.dislike]
-
-        # Add input restaurants to liked restaurants if not already present
-        liked_restaurants.extend([r for r in input_restaurants if r not in liked_restaurants])
+        # Get user's full preference list for the AI prompt
+        user_preferences = UserRestaurantPreference.query.filter_by(user_id=user.id).join(Restaurant).all()
+        liked_restaurants = [p.restaurant.name for p in user_preferences if p.preference == PreferenceType.like]
+        disliked_restaurants = [p.restaurant.name for p in user_preferences if p.preference == PreferenceType.dislike]
 
         recommended_restaurants = get_similar_restaurants(
-            liked_restaurants=liked_restaurants,
-            disliked_restaurants=disliked_restaurants,
+            liked_restaurants=list(set(liked_restaurants)), # Use set to ensure uniqueness
+            disliked_restaurants=list(set(disliked_restaurants)),
             city=city
         )
         logging.debug(f"Recommended restaurants: {recommended_restaurants}")
 
-        # Store recommended restaurants in database
+        # Store recommended restaurants in the database
         for rec in recommended_restaurants:
             restaurant_name = rec['name']
-            # Get or create restaurant
-            restaurant = Restaurant.query.filter_by(name=restaurant_name).first()
+            restaurant_slug = generate_slug(restaurant_name, city)
+            
+            # Check for existing recommended restaurant by slug to avoid duplicates
+            restaurant = Restaurant.query.filter_by(slug=restaurant_slug).first()
             if not restaurant:
-                logging.debug(f"Adding new recommended restaurant: {restaurant_name} in {city}")
-                new_restaurant = Restaurant(name=restaurant_name, location=city, cuisine_type=None)
-                db.session.add(new_restaurant)
-                db.session.commit()
-                restaurant = new_restaurant
+                logging.debug(f"Adding new recommended restaurant: {restaurant_name}")
+                restaurant = Restaurant(
+                    name=restaurant_name,
+                    location=city,
+                    provider='manual', # AI recommendations are manual entries
+                    place_id=str(uuid.uuid4()),
+                    slug=restaurant_slug
+                )
+                db.session.add(restaurant)
+                db.session.flush() # Get ID before commit
 
             # Link recommendation to user request
-            request_restaurant = RequestRestaurant(
-                user_request_id=new_user_request.id,
+            req_rest = RequestRestaurant(
+                user_request_id=user_request.id,
                 restaurant_id=restaurant.id,
                 type=RequestType.recommendation
             )
-            db.session.add(request_restaurant)
-            db.session.commit()
+            db.session.add(req_rest)
+        
+        db.session.commit()
 
         return jsonify({"recommendations": recommended_restaurants})
 
     except Exception as e:
-        logging.error(f"Error in get_recommendations: {e}")
         db.session.rollback()
-        return jsonify({"error": str(e)})
+        logging.error(f"Error in get_recommendations: {e}", exc_info=True)
+        return jsonify({"error": "An internal error occurred."}), 500
 
 @app.route('/get_restaurants', methods=['GET'])
 def get_restaurants():
@@ -295,9 +334,22 @@ def update_user():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/autocomplete')
+def autocomplete():
+    query = request.args.get('query', '')
+    city = request.args.get('city', '')
+    if not query or not city:
+        return jsonify([])
+    
+    results = places_service.autocomplete(query, city)
+    if results is None:
+        return jsonify({"error": "API call failed. Check server logs and API key configuration."}), 500
+    
+    return jsonify(results)
+
 if __name__ == '__main__':
     debug_mode = os.getenv('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
-    port = int(os.getenv('FLASK_PORT', 5000))
+    port = int(os.getenv('FLASK_PORT', 5001))
     host = os.getenv('FLASK_HOST', '127.0.0.1')
     
     print(f'Starting Campfire application on {host}:{port} (debug={debug_mode})')
