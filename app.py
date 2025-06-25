@@ -43,6 +43,13 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+# Debug: Check API key in deployment (remove after verification)
+api_key = os.getenv('OPENAI_API_KEY')
+if api_key:
+    logging.info(f"OpenAI API key loaded: {api_key[:15]}...")
+else:
+    logging.error("No OpenAI API key found in environment!")
+
 @app.route('/')
 def index():
     return render_template('index.html')
