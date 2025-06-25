@@ -215,6 +215,13 @@ header .subtitle p {
     width: 100%;
 }
 
+/* Ensure the restaurant text input fully expands */
+.restaurant-input-group input.form-control[name="restaurant_name"] {
+    flex: 1 1 auto; /* Grow to fill available space */
+    width: 100%;
+    min-width: 0; /* Allow shrinking in flexbox */
+}
+
 .remove-restaurant-btn {
     background: none;
     border: none;
