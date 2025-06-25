@@ -32,6 +32,10 @@ db.init_app(app)
 # Initialize Flask-Migrate
 migrate = Migrate(app, db)
 
+# Create database tables if they don't exist
+with app.app_context():
+    db.create_all()
+
 # Set up logging with configurable level
 log_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()
 logging.basicConfig(
