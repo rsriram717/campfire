@@ -1,16 +1,13 @@
 {
   "version": 2,
   "buildCommand": "PYTHONPATH=. FLASK_ENV=production flask db upgrade",
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python",
-      "config": {
-        "runtime": "python3.9",
-        "maxLambdaSize": "15mb"
-      }
+  "functions": {
+    "app.py": {
+      "runtime": "python3.9",
+      "memory": 1024,
+      "maxDuration": 60
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
