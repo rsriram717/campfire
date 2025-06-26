@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Enum, DateTime
+from supabase import create_client, Client
 
 from services import places_service
 from utils import generate_slug
@@ -22,8 +23,31 @@ from models import db, User, Restaurant, UserRequest, RequestRestaurant, Request
 # Initialize Flask app, explicitly setting a writable instance path for Vercel
 app = Flask(__name__, instance_path='/tmp/instance')
 
-# Configure SQLite database to use the /tmp directory for Vercel's writable filesystem
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:////tmp/restaurant_recommendations.db')
+# Configure database based on environment
+ENVIRONMENT = os.getenv('FLASK_ENV', 'development')
+if ENVIRONMENT == 'production':
+    # Supabase configuration
+    SUPABASE_URL = os.getenv('SUPABASE_URL')
+    SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+    DATABASE_URL = os.getenv('DATABASE_URL')  # This should be the full Postgres connection string from Supabase
+    
+    if not all([SUPABASE_URL, SUPABASE_KEY, DATABASE_URL]):
+        raise ValueError("Supabase credentials not found in production environment")
+    
+    try:
+        # Initialize Supabase client
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        # Configure SQLAlchemy to use the Postgres connection string
+        app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+        logging.info("Successfully configured Supabase connection")
+    except Exception as e:
+        logging.error(f"Failed to initialize Supabase: {e}")
+        raise
+else:
+    # Use SQLite for development
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/restaurant_recommendations.db'
+    logging.info("Using SQLite database for development")
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SQLAlchemy
@@ -31,10 +55,6 @@ db.init_app(app)
 
 # Initialize Flask-Migrate
 migrate = Migrate(app, db)
-
-# Create database tables if they don't exist
-with app.app_context():
-    db.create_all()
 
 # Set up logging with configurable level
 log_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()
