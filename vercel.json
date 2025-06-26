@@ -1,13 +1,6 @@
 {
   "version": 2,
   "buildCommand": "PYTHONPATH=. FLASK_ENV=production flask db upgrade",
-  "functions": {
-    "app.py": {
-      "runtime": "python3.9",
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
   "routes": [
     {
       "src": "/(.*)",
