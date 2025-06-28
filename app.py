@@ -31,13 +31,14 @@ if ENVIRONMENT == 'production':
     # Supabase configuration
     SUPABASE_URL = os.getenv('SUPABASE_URL')
     SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-    DATABASE_URL = os.getenv('DATABASE_URL')  # This should be the full Postgres connection string from Supabase
+    # Use POSTGRES_URL from Vercel integration, fallback to DATABASE_URL
+    DATABASE_URL = os.getenv('POSTGRES_URL') or os.getenv('DATABASE_URL')
     
     if not all([SUPABASE_URL, SUPABASE_KEY, DATABASE_URL]):
         missing = []
         if not SUPABASE_URL: missing.append('SUPABASE_URL')
         if not SUPABASE_KEY: missing.append('SUPABASE_KEY')
-        if not DATABASE_URL: missing.append('DATABASE_URL')
+        if not DATABASE_URL: missing.append('DATABASE_URL or POSTGRES_URL')
         raise ValueError(f"Missing required Supabase credentials in production environment: {', '.join(missing)}")
     
     try:

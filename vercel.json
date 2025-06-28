@@ -1,18 +1,8 @@
 {
-  "version": 2,
   "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python",
-      "config": {
-        "buildCommand": "./build.sh"
-      }
-    }
+    { "src": "app.py", "use": "@vercel/python", "config": { "buildCommand": "./build.sh" } }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "app.py"
-    }
+    { "src": "/(.*)", "dest": "app.py" }
   ]
 } 
