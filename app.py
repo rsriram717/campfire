@@ -101,18 +101,31 @@ if ENVIRONMENT == 'production':
             existing_tables = inspector.get_table_names()
             logging.info(f"Found existing tables: {existing_tables}")
             
+            # Log detailed schema information
+            if 'restaurant' in existing_tables:
+                columns = inspector.get_columns('restaurant')
+                logging.info("Restaurant table schema:")
+                for col in columns:
+                    logging.info(f"Column: {col['name']}, Type: {col['type']}, Nullable: {col['nullable']}")
+            
             # Check if alembic_version table exists and has our initial migration
             initial_migration_id = 'c9e344f09bd8'  # from our initial migration file
+            cuisine_type_migration_id = '2024_03_14_01'  # from increase_cuisine_type_length.py
             has_alembic = 'alembic_version' in existing_tables
             should_run_migrations = True
             
             if has_alembic:
-                # Check if our initial migration is recorded
+                # Check if our migrations are recorded
                 with db.engine.connect() as conn:
                     result = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-                    if result == initial_migration_id:
-                        logging.info("Initial migration already applied, skipping migrations")
+                    logging.info(f"Current migration version: {result}")
+                    if result == cuisine_type_migration_id:
+                        logging.info("All migrations already applied, skipping migrations")
                         should_run_migrations = False
+                    elif result == initial_migration_id:
+                        logging.info("Need to apply cuisine_type length migration")
+                    else:
+                        logging.info(f"Unknown migration state: {result}")
             
             if should_run_migrations:
                 if not existing_tables:
@@ -124,7 +137,7 @@ if ENVIRONMENT == 'production':
                     if not has_alembic:
                         with db.engine.connect() as conn:
                             conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
-                            conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES ('{initial_migration_id}')"))
+                            conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES ('{cuisine_type_migration_id}')"))
                             conn.commit()
                     logging.info("Recorded initial migration")
                 else:
@@ -132,12 +145,21 @@ if ENVIRONMENT == 'production':
                     if not has_alembic:
                         with db.engine.connect() as conn:
                             conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
-                            conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES ('{initial_migration_id}')"))
+                            conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES ('{cuisine_type_migration_id}')"))
                             conn.commit()
+                    
+                    # Ensure cuisine_type column is the right length
+                    with db.engine.connect() as conn:
+                        conn.execute(text("ALTER TABLE restaurant ALTER COLUMN cuisine_type TYPE VARCHAR(200)"))
+                        conn.commit()
+                        logging.info("Updated cuisine_type column length to 200")
             
             # Verify final table state
-            tables = inspector.get_table_names()
-            logging.info(f"Final database tables: {tables}")
+            if 'restaurant' in existing_tables:
+                columns = inspector.get_columns('restaurant')
+                logging.info("Final restaurant table schema:")
+                for col in columns:
+                    logging.info(f"Column: {col['name']}, Type: {col['type']}, Nullable: {col['nullable']}")
         
     except Exception as e:
         logging.error(f"Database migration failed: {str(e)}")
