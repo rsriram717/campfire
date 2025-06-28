@@ -27,56 +27,41 @@ app = Flask(__name__, instance_path='/tmp/instance')
 
 # Configure database based on environment
 ENVIRONMENT = os.getenv('FLASK_ENV', 'development')
+
+# Get the appropriate database URL based on environment
 if ENVIRONMENT == 'production':
-    # Supabase configuration
-    SUPABASE_URL = os.getenv('SUPABASE_URL')
-    SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-    # Use POSTGRES_URL from Vercel integration, fallback to DATABASE_URL
     DATABASE_URL = os.getenv('POSTGRES_URL') or os.getenv('DATABASE_URL')
+elif ENVIRONMENT == 'staging':
+    DATABASE_URL = os.getenv('STAGING_DATABASE_URL')
+else:
+    # Development environment
+    DATABASE_URL = os.getenv('DEV_DATABASE_URL') or os.getenv('STAGING_DATABASE_URL') or 'sqlite:////tmp/restaurant_recommendations.db'
+
+# Ensure postgresql:// protocol for PostgreSQL connections
+if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+logging.info(f"Using database for {ENVIRONMENT} environment")
+
+# Supabase configuration (only needed in production)
+if ENVIRONMENT == 'production':
+    SUPABASE_URL = os.getenv('SUPABASE_URL', '')  # Default to empty string instead of None
+    SUPABASE_KEY = os.getenv('SUPABASE_KEY', '')  # Default to empty string instead of None
     
-    if not all([SUPABASE_URL, SUPABASE_KEY, DATABASE_URL]):
+    if not all([SUPABASE_URL, SUPABASE_KEY]):
         missing = []
         if not SUPABASE_URL: missing.append('SUPABASE_URL')
         if not SUPABASE_KEY: missing.append('SUPABASE_KEY')
-        if not DATABASE_URL: missing.append('DATABASE_URL or POSTGRES_URL')
         raise ValueError(f"Missing required Supabase credentials in production environment: {', '.join(missing)}")
     
     try:
         # Initialize Supabase client
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        
-        # Clean up the database URL
-        if not DATABASE_URL:
-            raise ValueError("Database URL is required but not provided")
-            
-        # First ensure it uses postgresql:// protocol
-        if DATABASE_URL.startswith('postgres://'):
-            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-        
-        # Remove any non-standard parameters (like supa=)
-        if '?' in DATABASE_URL:
-            base_url = DATABASE_URL.split('?')[0]
-            params = DATABASE_URL.split('?')[1].split('&')
-            valid_params = ['sslmode', 'connect_timeout', 'application_name']
-            cleaned_params = [p for p in params if any(p.startswith(v + '=') for v in valid_params)]
-            DATABASE_URL = base_url
-            if cleaned_params:
-                DATABASE_URL += '?' + '&'.join(cleaned_params)
-            
-        app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-        # Log the database connection info (hiding credentials)
-        db_url_parts = DATABASE_URL.split('@')
-        if len(db_url_parts) > 1:
-            logging.info("Successfully configured database connection with URL: %s", db_url_parts[0].split('://')[0] + '://*****@' + db_url_parts[1].split('/')[0])
-        else:
-            logging.info("Successfully configured database connection (URL format not standard)")
+        logging.info("Successfully configured Supabase client")
     except Exception as e:
         logging.error(f"Failed to initialize database connection: {str(e)}")
         raise
-else:
-    # Use SQLite for development
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/restaurant_recommendations.db'
-    logging.info("Using SQLite database for development")
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -162,11 +147,19 @@ def index():
 def get_recommendations():
     try:
         data = request.json
-        user_name = data['user'].lower()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        user_name = data.get('user', '').lower()
+        if not user_name:
+            return jsonify({"error": "User name is required"}), 400
+            
         email = os.getenv('DEFAULT_USER_EMAIL', 'user@example.com')
         place_ids = data.get('place_ids', [])
         input_restaurant_names = data.get('input_restaurants', [])
-        city = data['city']
+        city = data.get('city')
+        if not city:
+            return jsonify({"error": "City is required"}), 400
         
         logging.debug(f"Request: user='{user_name}', city='{city}', place_ids={place_ids}, names={input_restaurant_names}")
         
@@ -192,124 +185,56 @@ def get_recommendations():
             restaurant = Restaurant.query.filter_by(provider=provider, place_id=place_id).first()
             
             if not restaurant:
-                details = places_service.get_details(place_id)
-                if not details or not details.get('name'):
-                    logging.warning(f"Could not fetch valid details for place_id: {place_id}. Skipping.")
-                    continue
+                try:
+                    details = places_service.get_details(place_id)
+                    if not details or 'name' not in details:
+                        logging.warning(f"Could not fetch valid details for place_id: {place_id}. Skipping.")
+                        continue
 
-                # Final check to prevent race conditions or slug collisions
-                slug = generate_slug(details['name'], city)
-                existing_by_slug = Restaurant.query.filter_by(slug=slug).first()
-                if existing_by_slug:
-                    restaurant = existing_by_slug
-                else:
+                    # Create new restaurant with debug logging
+                    logging.info(f"Creating new restaurant with details: {details}")
                     restaurant = Restaurant(
-                        name=details['name'],
-                        location=details.get('address', 'Unknown'),
-                        cuisine_type=", ".join(details.get('categories', [])),
+                        name=details.get('name'),
+                        location=details.get('address', ''),
+                        cuisine_type=", ".join(details.get('categories', [])),  # Join list into string
                         provider=provider,
                         place_id=place_id,
-                        slug=slug
+                        slug=generate_slug(details.get('name', ''), city)
                     )
+                    logging.info(f"Restaurant object created: {restaurant.__dict__}")
+                    
                     db.session.add(restaurant)
-
-            if restaurant:
-                input_restaurants.append(restaurant)
+                    db.session.flush()  # Get the ID without committing
+                    logging.info(f"Restaurant added to session with ID: {restaurant.id}")
+                except Exception as e:
+                    logging.error(f"Error creating restaurant: {str(e)}")
+                    raise
+            
             processed_place_ids.add(place_id)
-
-        # Fallback for manually entered names
-        for name in input_restaurant_names:
-            # A more robust implementation might try to fuzzy match or find these via API
-            restaurant = Restaurant.query.filter(Restaurant.name.ilike(f'%{name}%')).first()
-            if not restaurant:
-                logging.debug(f"Creating fallback restaurant for name: {name}")
-                restaurant = Restaurant(
-                    name=name, 
-                    location=city, 
-                    provider='manual', 
-                    place_id=str(uuid.uuid4()), # Generate a random unique ID
-                    slug=generate_slug(name, city)
-                )
-                db.session.add(restaurant)
             input_restaurants.append(restaurant)
-
-        # Flush to get IDs for new objects
-        db.session.flush()
-
-        # Associate input restaurants with the request and user preferences
-        for restaurant in input_restaurants:
-            # Link to request
-            req_rest = RequestRestaurant(
+            
+            # Add to user request
+            request_restaurant = RequestRestaurant(
                 user_request_id=user_request.id,
                 restaurant_id=restaurant.id,
                 type=RequestType.input
             )
-            db.session.add(req_rest)
-
-            # Set preference to 'like'
-            user_pref = UserRestaurantPreference.query.filter_by(user_id=user.id, restaurant_id=restaurant.id).first()
-            if user_pref:
-                if user_pref.preference != PreferenceType.like:
-                    user_pref.preference = PreferenceType.like
-                    user_pref.timestamp = datetime.utcnow()
-            else:
-                new_pref = UserRestaurantPreference(
-                    user_id=user.id,
-                    restaurant_id=restaurant.id,
-                    preference=PreferenceType.like,
-                    timestamp=datetime.utcnow()
-                )
-                db.session.add(new_pref)
+            db.session.add(request_restaurant)
         
-        db.session.commit() # Commit all transaction changes
+        try:
+            db.session.commit()
+            logging.info("Successfully committed all changes to database")
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Database commit failed: {str(e)}")
+            raise
 
-        # Get user's full preference list for the AI prompt
-        user_preferences = UserRestaurantPreference.query.filter_by(user_id=user.id).join(Restaurant).all()
-        liked_restaurants = [p.restaurant.name for p in user_preferences if p.preference == PreferenceType.like]
-        disliked_restaurants = [p.restaurant.name for p in user_preferences if p.preference == PreferenceType.dislike]
-
-        recommended_restaurants = get_similar_restaurants(
-            liked_restaurants=list(set(liked_restaurants)), # Use set to ensure uniqueness
-            disliked_restaurants=list(set(disliked_restaurants)),
-            city=city
-        )
-        logging.debug(f"Recommended restaurants: {recommended_restaurants}")
-
-        # Store recommended restaurants in the database
-        for rec in recommended_restaurants:
-            restaurant_name = rec['name']
-            restaurant_slug = generate_slug(restaurant_name, city)
-            
-            # Check for existing recommended restaurant by slug to avoid duplicates
-            restaurant = Restaurant.query.filter_by(slug=restaurant_slug).first()
-            if not restaurant:
-                logging.debug(f"Adding new recommended restaurant: {restaurant_name}")
-                restaurant = Restaurant(
-                    name=restaurant_name,
-                    location=city,
-                    provider='manual', # AI recommendations are manual entries
-                    place_id=str(uuid.uuid4()),
-                    slug=restaurant_slug
-                )
-                db.session.add(restaurant)
-                db.session.flush() # Get ID before commit
-
-            # Link recommendation to user request
-            req_rest = RequestRestaurant(
-                user_request_id=user_request.id,
-                restaurant_id=restaurant.id,
-                type=RequestType.recommendation
-            )
-            db.session.add(req_rest)
+        return jsonify({"message": "Restaurants processed successfully"})
         
-        db.session.commit()
-
-        return jsonify({"recommendations": recommended_restaurants})
-
     except Exception as e:
         db.session.rollback()
-        logging.error(f"Error in get_recommendations: {e}", exc_info=True)
-        return jsonify({"error": "An internal error occurred."}), 500
+        logging.error(f"Error in get_recommendations: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/get_restaurants', methods=['GET'])
 def get_restaurants():
