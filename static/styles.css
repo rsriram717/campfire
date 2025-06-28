@@ -8,7 +8,7 @@
 
 body {
     font-family: Arial, sans-serif;
-    background-color: var(--campfire-bg);
+    background-color: #f8f9fa;
 }
 
 header.bg-primary {
@@ -19,21 +19,34 @@ header.bg-primary {
     width: 100%;
     padding: 10px;
     margin-bottom: 10px;
-    border: none;
-    border-bottom: 2px solid #ccc;
-    background-color: transparent;
-    transition: border-color 0.3s;
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px;
+    color: #333;
+    background-color: #f0f0f0;
+    outline: none;
+    transition: all 0.3s ease;
 }
 
 .uiverse-input:focus, .uiverse-select:focus {
-    border-color: var(--campfire-orange);
-    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+
+.uiverse-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007bff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.3-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 10px top 50%;
+    background-size: 10px auto;
 }
 
 .loading {
     text-align: center;
-    font-size: 18px;
-    color: var(--campfire-red);
+    font-size: 1.2em;
+    color: #007bff;
 }
 
 .recommendations-output {
@@ -116,30 +129,31 @@ header.bg-primary {
 }
 
 .preference-toggle button {
-    border: none;
-    padding: 8px 16px;
+    margin-left: 5px;
     border-radius: 20px;
-    font-size: 14px;
-    cursor: pointer;
+    padding: 5px 15px;
+    border: 1px solid #ccc;
+    background-color: #f0f0f0;
     transition: all 0.3s ease;
-    background: transparent;
 }
 
 .preference-toggle button.active {
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    color: white;
 }
 
-.preference-toggle button.like.active {
-    color: var(--campfire-orange);
+.preference-toggle .like.active {
+    background-color: #28a745;
+    border-color: #28a745;
 }
 
-.preference-toggle button.dislike.active {
-    color: var(--campfire-red);
+.preference-toggle .dislike.active {
+    background-color: #dc3545;
+    border-color: #dc3545;
 }
 
-.preference-toggle button.neutral.active {
-    color: var(--campfire-dark);
+.preference-toggle .neutral.active {
+    background-color: #6c757d;
+    border-color: #6c757d;
 }
 
 header h1 {
@@ -190,20 +204,25 @@ header .subtitle p {
 }
 
 .card {
-    border-color: var(--campfire-yellow);
-    background-color: #FFF9F1;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .card-title {
-    color: var(--campfire-red) !important;
+    font-weight: bold;
 }
 
 .restaurant-input-group {
     display: flex;
     align-items: center;
-    gap: 8px;
-    width: 100%;
-    margin-bottom: 10px;
+}
+
+.restaurant-input-group .form-control {
+    flex-grow: 1;
+}
+
+.remove-restaurant-btn {
+    margin-left: 8px; /* Space between input and button */
 }
 
 /* Target the wrapper div that Awesomplete creates */
@@ -243,20 +262,14 @@ header .subtitle p {
     width: 100%;
 }
 
-.remove-restaurant-btn {
-    background: none;
-    border: none;
-    color: #dc3545;
-    font-size: 1.2rem;
-    padding: 0;
-    line-height: 1;
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
+/* --- Validation --- */
+/* Remove Bootstrap's default validation icons */
+.form-control.is-valid, .was-validated .form-control:valid {
+    background-image: none !important;
 }
 
-.remove-restaurant-btn:hover {
-    opacity: 1;
-    color: #a71d2a;
+.form-control.is-invalid, .was-validated .form-control:invalid {
+    background-image: none !important;
 }
 
 /* New Filter Section Styles */

@@ -9,7 +9,7 @@ const UsernameHandler = {
         return name.trim().replace(/\s+/g, ' ');
     },
 
-    validate: (inputElement, charCountElement, indicatorElement) => {
+    validate: (inputElement, charCountElement) => {
         const value = inputElement.value;
         const sanitized = UsernameHandler.sanitize(value);
         const isValid = inputElement.checkValidity() && sanitized.length >= 2;
@@ -17,13 +17,15 @@ const UsernameHandler = {
         // Update char counter
         charCountElement.textContent = `${sanitized.length} / ${inputElement.maxLength}`;
 
-        // Update validation indicator
+        // Update validation border
         if (sanitized.length === 0) {
-            indicatorElement.innerHTML = '';
+            inputElement.classList.remove('is-valid', 'is-invalid');
         } else if (isValid) {
-            indicatorElement.innerHTML = '✅';
+            inputElement.classList.add('is-valid');
+            inputElement.classList.remove('is-invalid');
         } else {
-            indicatorElement.innerHTML = '❌';
+            inputElement.classList.add('is-invalid');
+            inputElement.classList.remove('is-valid');
         }
         return isValid;
     },
@@ -77,13 +79,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Username fields for "Get Recommendations" tab
     const nameInput = document.getElementById('name');
     const nameCharCount = document.getElementById('name-char-count');
-    const nameValidationIndicator = document.getElementById('name-validation-indicator');
     const rememberMeCheckbox = document.getElementById('remember-me');
 
     // Username fields for "Preferences" tab
     const userNameInput = document.getElementById('user-name');
     const userNameCharCount = document.getElementById('user-name-char-count');
-    const userNameValidationIndicator = document.getElementById('user-name-validation-indicator');
     const rememberMePrefsCheckbox = document.getElementById('remember-me-prefs');
 
     let currentPreferences = new Map();
@@ -93,28 +93,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const rememberedName = UsernameHandler.loadRemembered(nameInput, rememberMeCheckbox);
     if(rememberedName) {
         UsernameHandler.loadRemembered(userNameInput, rememberMePrefsCheckbox);
-        UsernameHandler.validate(nameInput, nameCharCount, nameValidationIndicator);
-        UsernameHandler.validate(userNameInput, userNameCharCount, userNameValidationIndicator);
+        UsernameHandler.validate(nameInput, nameCharCount);
+        UsernameHandler.validate(userNameInput, userNameCharCount);
         UsernameHandler.createStatusAlert(rememberedName, 'user-status-alert');
     }
 
     // --- Event Listeners for Username Inputs ---
 
-    function setupUsernameValidation(input, charCount, indicator) {
+    function setupUsernameValidation(input, charCount) {
         input.addEventListener('input', () => {
-            UsernameHandler.validate(input, charCount, indicator);
+            UsernameHandler.validate(input, charCount);
         });
     }
     
-    setupUsernameValidation(nameInput, nameCharCount, nameValidationIndicator);
-    setupUsernameValidation(userNameInput, userNameCharCount, userNameValidationIndicator);
+    setupUsernameValidation(nameInput, nameCharCount);
+    setupUsernameValidation(userNameInput, userNameCharCount);
 
     // Sync checkboxes
     rememberMeCheckbox.addEventListener('change', () => {
         rememberMePrefsCheckbox.checked = rememberMeCheckbox.checked;
         // Also sync the other name field
         userNameInput.value = nameInput.value;
-        UsernameHandler.validate(userNameInput, userNameCharCount, userNameValidationIndicator);
+        UsernameHandler.validate(userNameInput, userNameCharCount);
     });
     rememberMePrefsCheckbox.addEventListener('change', () => {
         rememberMeCheckbox.checked = rememberMePrefsCheckbox.checked;
@@ -123,11 +123,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Sync name fields
     nameInput.addEventListener('input', () => {
         userNameInput.value = nameInput.value;
-        UsernameHandler.validate(userNameInput, userNameCharCount, userNameValidationIndicator);
+        UsernameHandler.validate(userNameInput, userNameCharCount);
     });
     userNameInput.addEventListener('input', () => {
-        nameInput.value = userNameInput.value;
-        UsernameHandler.validate(nameInput, nameCharCount, nameValidationIndicator);
+        nameInput.value = nameInput.value;
+        UsernameHandler.validate(nameInput, nameCharCount);
     });
 
     // --- Autocomplete and Dynamic Inputs ---
@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add event listener to userNameInput to enable/disable fetchRestaurantsBtn
         userNameInput.addEventListener('input', function() {
             const userName = UsernameHandler.sanitize(userNameInput.value);
-            if (UsernameHandler.validate(userNameInput, userNameCharCount, userNameValidationIndicator)) {
+            if (UsernameHandler.validate(userNameInput, userNameCharCount)) {
                 fetchRestaurantsBtn.disabled = false;
                 fetchRestaurantsBtn.classList.add('btn-primary');
                 fetchRestaurantsBtn.classList.remove('btn-secondary');
