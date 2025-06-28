@@ -203,15 +203,43 @@ header .subtitle p {
     align-items: center;
     gap: 8px;
     width: 100%;
+    margin-bottom: 10px;
 }
 
 /* Target the wrapper div that Awesomplete creates */
 .restaurant-input-group div.awesomplete {
     flex-grow: 1; /* Make the library's container take up the space */
+    width: 100%; /* Ensure the container itself is full width */
 }
 
 /* Ensure the actual input field inside it is also full-width */
 .restaurant-input-group div.awesomplete > input {
+    width: 100% !important; /* Force full width with !important to override any library styles */
+}
+
+/* Ensure the dropdown list is also full width */
+.awesomplete > ul {
+    width: 100% !important; /* Force full width with !important */
+    max-width: none !important; /* Remove any max-width restrictions */
+    min-width: 100% !important; /* Ensure minimum width matches container */
+    left: 0 !important; /* Align with left edge */
+}
+
+/* Ensure form controls take full width */
+.form-control {
+    width: 100% !important;
+    max-width: none !important;
+}
+
+/* Container for the form to ensure proper spacing */
+#restaurant-form {
+    width: 100%;
+    max-width: 100%;
+    padding: 0 15px;
+}
+
+/* Ensure the restaurant inputs container takes full width */
+#restaurant-inputs {
     width: 100%;
 }
 

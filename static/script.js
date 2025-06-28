@@ -118,24 +118,41 @@ document.addEventListener('DOMContentLoaded', function() {
         const name = document.getElementById('name').value;
         const city = document.getElementById('city').value;
         
-        const placeIds = [...restaurantInputsContainer.querySelectorAll('input[name="place_id"]')]
-            .map(input => input.value)
-            .filter(Boolean); // Filter out empty ones
+        // Collect place IDs and names from the restaurant inputs
+        const restaurantInputs = document.querySelectorAll('.restaurant-input-group');
+        const placeIds = [];
+        const restaurantNames = [];
+        restaurantInputs.forEach(group => {
+            const placeId = group.querySelector('input[name="place_id"]').value;
+            const restaurantName = group.querySelector('input[name="restaurant_name"]').value;
+            if (placeId) {
+                placeIds.push(placeId);
+            } else if (restaurantName) {
+                restaurantNames.push(restaurantName);
+            }
+        });
 
-        // Fallback for names if place_id is not selected
-        const restaurantNames = [...restaurantInputsContainer.querySelectorAll('input[name="restaurant_name"]')]
-            .map((input, index) => ({ name: input.value, placeId: placeIds[index] }))
-            .filter(item => item.name && !item.placeId)
-            .map(item => item.name);
+        // Collect selected restaurant types
+        const restaurantTypes = [];
+        document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+            restaurantTypes.push(checkbox.value);
+        });
 
+        const neighborhood = document.getElementById('neighborhood').value;
+
+        // Make the API call to the backend
         fetch('/get_recommendations', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
                 user: name,
-                place_ids: placeIds,
-                input_restaurants: restaurantNames, // Send names for ones without a place_id
+                place_ids: placeIds, 
+                input_restaurants: restaurantNames,
                 city: city,
+                neighborhood: neighborhood,
+                restaurant_types: restaurantTypes
             }),
         })
         .then(response => response.json())

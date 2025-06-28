@@ -19,7 +19,7 @@ def load_prompt_template():
     with open(prompt_path, 'r') as file:
         return file.read()
 
-def get_similar_restaurants(liked_restaurants, disliked_restaurants, city):
+def get_similar_restaurants(liked_restaurants, disliked_restaurants, city, neighborhood=None, restaurant_types=None):
     logging.debug("Constructing prompt for GPT-4.")
     
     # Load the prompt template
@@ -28,22 +28,35 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city):
     # Format the liked restaurants list
     liked_restaurants_formatted = '\n'.join(f'- {restaurant}' for restaurant in liked_restaurants)
     
-    # Format the disliked restaurants section if it exists
+    # Format the disliked restaurants section
     disliked_section = ""
     if disliked_restaurants:
         disliked_formatted = '\n'.join(f'- {restaurant}' for restaurant in disliked_restaurants)
         disliked_section = f"Disliked Restaurants (please avoid similar places):\n{disliked_formatted}\n\n"
+
+    # Format the neighborhood section
+    neighborhood_section = ""
+    if neighborhood:
+        neighborhood_section = f"The user is looking for suggestions in the {neighborhood} neighborhood of {city}. Please ensure all recommendations are located there.\n\n"
+
+    # Format the restaurant type section
+    type_section = ""
+    if restaurant_types:
+        type_list = ", ".join(restaurant_types)
+        type_section = f"The user prefers the following type(s) of restaurants: {type_list}. Please factor this into your suggestions.\n\n"
     
     # Fill in the template
     prompt = prompt_template.format(
         city=city,
         liked_restaurants=liked_restaurants_formatted,
         disliked_section=disliked_section,
+        neighborhood_section=neighborhood_section,
+        type_section=type_section,
         num_recommendations=NUM_RECOMMENDATIONS
     )
 
     try:
-        logging.debug("Sending request to GPT-4 API.")
+        logging.debug(f"Sending request to GPT-4 API with prompt: {prompt}")
         client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4",  # Specify GPT-4 model
@@ -54,7 +67,12 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city):
         logging.debug(f"Raw API Response: {response}")
 
         # Parse and return the recommendations
-        restaurants = response.choices[0].message.content.split('\n')
+        content = response.choices[0].message.content
+        if not content:
+            logging.warning("Received empty content from OpenAI API.")
+            return []
+            
+        restaurants = content.split('\n')
         logging.debug(f"Parsed Restaurants: {restaurants}")
         recommendations = []
         for restaurant in restaurants:

@@ -1,10 +1,15 @@
-Given a user's restaurant preferences in {city}:
+You are an expert restaurant recommendation system.
+Your task is to suggest {num_recommendations} new restaurants in {city} based on the user's preferences.
 
+User Preferences:
 Liked Restaurants:
 {liked_restaurants}
 
 {disliked_section}
-Please recommend {num_recommendations} restaurants that are similar to their liked restaurants while avoiding places similar to their disliked ones. Focus especially on the most recently liked restaurants.
-
-List the responses as <name> - <2-3 short phrases of why it would be a good fit>
-Do not number the responses 
+{neighborhood_section}
+{type_section}
+Please provide a list of {num_recommendations} unique restaurants that are not in the user's liked or disliked lists.
+For each recommendation, provide a brief (10-15 word) description of why it's a good match.
+Format the output as a plain list, with each restaurant on a new line, like this:
+Restaurant Name - Description
+Another Restaurant - Description 
