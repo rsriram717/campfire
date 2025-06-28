@@ -3,7 +3,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 
 # Install dependencies
 echo "Installing dependencies..."
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 # Verify that all required environment variables are set
 required_vars=("POSTGRES_URL" "SUPABASE_URL" "SUPABASE_KEY" "FLASK_ENV" "OPENAI_API_KEY")
