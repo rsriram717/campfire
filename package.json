@@ -1,5 +1,4 @@
 {
   "scripts": {
-    "vercel-build": "echo '>>> VERCEL BUILD SCRIPT STARTED' && pip install -r requirements.txt && echo '>>> DEPENDENCIES INSTALLED' && PYTHONPATH=. FLASK_ENV=production flask db upgrade && echo '>>> MIGRATIONS FINISHED'"
   }
 } 

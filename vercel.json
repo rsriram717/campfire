@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "PYTHONPATH=. FLASK_ENV=production flask db upgrade",
+  "buildCommand": "pip install -r requirements.txt && echo '>>> Dependencies installed' && PYTHONPATH=. FLASK_ENV=production flask db upgrade && echo '>>> Migrations completed'",
   "routes": [
     {
       "src": "/(.*)",

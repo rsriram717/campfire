@@ -1,9 +1,13 @@
+import sys
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 import os
 from flask_migrate import Migrate
-from dotenv import load_dotenv
-import sys
 import uuid
 import pdb
 import logging
@@ -14,8 +18,6 @@ from supabase import create_client, Client
 
 from services import places_service
 from utils import generate_slug
-
-load_dotenv()
 
 from openai_example import get_similar_restaurants, sanitize_name
 from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType, UserRestaurantPreference, PreferenceType
@@ -32,7 +34,11 @@ if ENVIRONMENT == 'production':
     DATABASE_URL = os.getenv('DATABASE_URL')  # This should be the full Postgres connection string from Supabase
     
     if not all([SUPABASE_URL, SUPABASE_KEY, DATABASE_URL]):
-        raise ValueError("Supabase credentials not found in production environment")
+        missing = []
+        if not SUPABASE_URL: missing.append('SUPABASE_URL')
+        if not SUPABASE_KEY: missing.append('SUPABASE_KEY')
+        if not DATABASE_URL: missing.append('DATABASE_URL')
+        raise ValueError(f"Missing required Supabase credentials in production environment: {', '.join(missing)}")
     
     try:
         # Initialize Supabase client
@@ -41,8 +47,8 @@ if ENVIRONMENT == 'production':
         app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
         logging.info("Successfully configured Supabase connection")
     except Exception as e:
-        logging.error(f"Failed to initialize Supabase: {e}")
-        raise
+        logging.error(f"Failed to initialize Supabase: {str(e)}")
+        raise ValueError(f"Failed to initialize Supabase. Please check your credentials and network connection. Error: {str(e)}")
 else:
     # Use SQLite for development
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/restaurant_recommendations.db'
