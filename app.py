@@ -45,11 +45,21 @@ if ENVIRONMENT == 'production':
         # Initialize Supabase client
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         # Configure SQLAlchemy to use the Postgres connection string
+        # Ensure URL uses postgresql:// instead of postgres://
+        if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
+            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        if not DATABASE_URL:
+            raise ValueError("Database URL is required but not provided")
         app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-        logging.info("Successfully configured Supabase connection")
+        # Log the database connection info (hiding credentials)
+        db_url_parts = DATABASE_URL.split('@')
+        if len(db_url_parts) > 1:
+            logging.info("Successfully configured database connection with URL: %s", db_url_parts[0].split('://')[0] + '://*****@' + db_url_parts[1].split('/')[0])
+        else:
+            logging.info("Successfully configured database connection (URL format not standard)")
     except Exception as e:
-        logging.error(f"Failed to initialize Supabase: {str(e)}")
-        raise ValueError(f"Failed to initialize Supabase. Please check your credentials and network connection. Error: {str(e)}")
+        logging.error(f"Failed to initialize database connection: {str(e)}")
+        raise
 else:
     # Use SQLite for development
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/restaurant_recommendations.db'
