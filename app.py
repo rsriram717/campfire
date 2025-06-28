@@ -44,12 +44,25 @@ if ENVIRONMENT == 'production':
     try:
         # Initialize Supabase client
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        # Configure SQLAlchemy to use the Postgres connection string
-        # Ensure URL uses postgresql:// instead of postgres://
-        if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
-            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        
+        # Clean up the database URL
         if not DATABASE_URL:
             raise ValueError("Database URL is required but not provided")
+            
+        # First ensure it uses postgresql:// protocol
+        if DATABASE_URL.startswith('postgres://'):
+            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        
+        # Remove any non-standard parameters (like supa=)
+        if '?' in DATABASE_URL:
+            base_url = DATABASE_URL.split('?')[0]
+            params = DATABASE_URL.split('?')[1].split('&')
+            valid_params = ['sslmode', 'connect_timeout', 'application_name']
+            cleaned_params = [p for p in params if any(p.startswith(v + '=') for v in valid_params)]
+            DATABASE_URL = base_url
+            if cleaned_params:
+                DATABASE_URL += '?' + '&'.join(cleaned_params)
+            
         app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
         # Log the database connection info (hiding credentials)
         db_url_parts = DATABASE_URL.split('@')
