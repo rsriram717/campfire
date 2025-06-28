@@ -98,19 +98,36 @@ if ENVIRONMENT == 'production':
     try:
         logging.info("Running database migrations...")
         with app.app_context():
-            # Create all tables if they don't exist
-            db.create_all()
-            # Then run migrations
-            from flask_migrate import upgrade
-            upgrade()
-            # Verify tables exist
+            # Check if tables exist first
+            from sqlalchemy import inspect
             inspector = inspect(db.engine)
+            existing_tables = inspector.get_table_names()
+            logging.info(f"Found existing tables: {existing_tables}")
+            
+            if not existing_tables:
+                # Only create tables if none exist
+                logging.info("No tables found. Creating initial schema...")
+                db.create_all()
+            else:
+                logging.info("Tables already exist, skipping initial creation")
+            
+            # Run any pending migrations
+            try:
+                from flask_migrate import upgrade
+                upgrade()
+                logging.info("Database migrations completed successfully")
+            except Exception as e:
+                if 'relation already exists' in str(e):
+                    logging.info("Tables already up to date")
+                else:
+                    raise
+            
+            # Verify final table state
             tables = inspector.get_table_names()
-            logging.info(f"Available tables after migration: {tables}")
-        logging.info("Database migrations completed successfully")
+            logging.info(f"Final database tables: {tables}")
+        
     except Exception as e:
         logging.error(f"Database migration failed: {str(e)}")
-        # In production, we want to know if migrations fail
         if ENVIRONMENT == 'production':
             raise
 
