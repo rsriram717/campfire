@@ -37,9 +37,21 @@ else:
     # Development environment
     DATABASE_URL = os.getenv('DEV_DATABASE_URL') or os.getenv('STAGING_DATABASE_URL') or 'sqlite:////tmp/restaurant_recommendations.db'
 
-# Ensure postgresql:// protocol for PostgreSQL connections
-if DATABASE_URL and DATABASE_URL.startswith('postgres://'):
-    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+# Clean and validate database URL
+if DATABASE_URL:
+    # First ensure it uses postgresql:// protocol
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    
+    # Remove any non-standard parameters (like supa=)
+    if '?' in DATABASE_URL:
+        base_url = DATABASE_URL.split('?')[0]
+        params = DATABASE_URL.split('?')[1].split('&')
+        valid_params = ['sslmode', 'connect_timeout', 'application_name']
+        cleaned_params = [p for p in params if any(p.startswith(v + '=') for v in valid_params)]
+        DATABASE_URL = base_url
+        if cleaned_params:
+            DATABASE_URL += '?' + '&'.join(cleaned_params)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 logging.info(f"Using database for {ENVIRONMENT} environment")
