@@ -70,6 +70,19 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+# Run database migrations on startup in production
+if ENVIRONMENT == 'production':
+    try:
+        logging.info("Running database migrations...")
+        from flask_migrate import upgrade
+        with app.app_context():
+            upgrade()
+        logging.info("Database migrations completed successfully")
+    except Exception as e:
+        logging.error(f"Database migration failed: {str(e)}")
+        # Don't raise here - let the app start even if migrations fail
+        # This prevents the app from crashing if migrations have already been run
+
 # Debug: Check API key in deployment (remove after verification)
 api_key = os.getenv('OPENAI_API_KEY')
 if api_key:
