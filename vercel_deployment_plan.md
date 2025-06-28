@@ -133,4 +133,13 @@ If deployment fails:
 - Watch build logs for Python version confirmation
 - Verify environment variables are accessible
 - Monitor database migration success
-- Check application logs for connection errors 
+- Check application logs for connection errors
+
+## Key Learnings & Troubleshooting
+
+### Vercel Build Configuration Precedence
+
+A critical issue encountered during this deployment was a conflict between the `vercel.json` file and the settings in the Vercel Dashboard UI.
+
+- **The Problem**: If a `builds` property exists in `vercel.json`, Vercel **completely ignores** the "Build & Development Settings" configured in the Project Settings UI. This means our `./build.sh` script was not being executed, causing silent failures where dependencies were not installed and database migrations did not run.
+- **The Solution**: For a Python project where we need a custom build script, the most reliable configuration is to **remove the `builds` object from `vercel.json` entirely**. This forces Vercel to respect the settings configured in the UI, ensuring our `Build Command` (`./build.sh`) and `Install Command` (left blank) are correctly used. 
