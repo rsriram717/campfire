@@ -189,7 +189,6 @@ def get_recommendations():
         if not user_name:
             return jsonify({"error": "User name is required"}), 400
             
-        email = os.getenv('DEFAULT_USER_EMAIL', 'user@example.com')
         place_ids = data.get('place_ids', [])
         input_restaurant_names = data.get('input_restaurants', [])
         city = data.get('city')
@@ -203,7 +202,9 @@ def get_recommendations():
         # Get or create user
         user = User.query.filter_by(name=user_name).first()
         if not user:
-            user = User(name=user_name, email=email)
+            # If user does not exist, create a new one with a unique email
+            user_email = f"{user_name.lower().replace(' ', '_')}@example.com"
+            user = User(name=user_name, email=user_email)
             db.session.add(user)
             db.session.flush()
 
