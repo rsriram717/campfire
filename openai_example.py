@@ -46,7 +46,7 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city):
         logging.debug("Sending request to GPT-4 API.")
         client = get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Specify GPT-4 model
+            model="gpt-4",  # Specify GPT-4 model
             messages=[{"role": "user", "content": prompt}],
             max_tokens=150  # Limit the response length
         )

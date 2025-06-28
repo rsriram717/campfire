@@ -224,12 +224,27 @@ def get_recommendations():
         try:
             db.session.commit()
             logging.info("Successfully committed all changes to database")
+            
+            # Get restaurant names for OpenAI
+            restaurant_names = [r.name for r in input_restaurants]
+            if input_restaurant_names:  # Add any manually entered names
+                restaurant_names.extend(input_restaurant_names)
+            
+            # Get disliked restaurants
+            disliked = UserRestaurantPreference.query.filter_by(
+                user_id=user.id,
+                preference=PreferenceType.dislike
+            ).all()
+            disliked_names = [r.restaurant.name for r in disliked]
+            
+            # Get recommendations from OpenAI
+            recommendations = get_similar_restaurants(liked_restaurants=restaurant_names, disliked_restaurants=disliked_names, city=city)
+            return jsonify({"recommendations": recommendations})
+            
         except Exception as e:
             db.session.rollback()
             logging.error(f"Database commit failed: {str(e)}")
             raise
-
-        return jsonify({"message": "Restaurants processed successfully"})
         
     except Exception as e:
         db.session.rollback()
@@ -387,4 +402,4 @@ def autocomplete():
 app.debug = True
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3000)))
+    app.run(host='0.0.0.0', port=3001)
