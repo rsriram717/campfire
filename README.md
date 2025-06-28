@@ -1,6 +1,6 @@
 # Campfire 🔥
 
-> *Because food is about more than just food*
+> *More than just a meal*
 
 Campfire is an intelligent restaurant recommendation system that leverages OpenAI's GPT-4 to provide personalized dining suggestions based on user preferences and dining history. The application learns from your favorite restaurants and provides thoughtful recommendations tailored to your taste.
 

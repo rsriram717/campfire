@@ -1,4 +1,72 @@
 // script.js
+
+// --- Shared Username Logic ---
+const UsernameHandler = {
+    LOCAL_STORAGE_KEY: 'campfire_username',
+
+    sanitize: (name) => {
+        if (!name) return '';
+        return name.trim().replace(/\s+/g, ' ');
+    },
+
+    validate: (inputElement, charCountElement, indicatorElement) => {
+        const value = inputElement.value;
+        const sanitized = UsernameHandler.sanitize(value);
+        const isValid = inputElement.checkValidity() && sanitized.length >= 2;
+
+        // Update char counter
+        charCountElement.textContent = `${sanitized.length} / ${inputElement.maxLength}`;
+
+        // Update validation indicator
+        if (sanitized.length === 0) {
+            indicatorElement.innerHTML = '';
+        } else if (isValid) {
+            indicatorElement.innerHTML = '✅';
+        } else {
+            indicatorElement.innerHTML = '❌';
+        }
+        return isValid;
+    },
+
+    remember: (name, rememberCheckbox) => {
+        if (rememberCheckbox.checked) {
+            localStorage.setItem(UsernameHandler.LOCAL_STORAGE_KEY, name);
+        } else {
+            localStorage.removeItem(UsernameHandler.LOCAL_STORAGE_KEY);
+        }
+    },
+    
+    loadRemembered: (inputElement, rememberCheckbox) => {
+        const rememberedName = localStorage.getItem(UsernameHandler.LOCAL_STORAGE_KEY);
+        if (rememberedName) {
+            inputElement.value = rememberedName;
+            rememberCheckbox.checked = true;
+            return rememberedName;
+        }
+        return null;
+    },
+
+    createStatusAlert: (rememberedName, alertContainerId) => {
+        const alertContainer = document.getElementById(alertContainerId);
+        if (alertContainer && rememberedName) {
+            alertContainer.innerHTML = `
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    Continuing as <strong>${rememberedName}</strong>. 
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close" id="clear-remembered-user">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>`;
+            
+            document.getElementById('clear-remembered-user').addEventListener('click', () => {
+                localStorage.removeItem(UsernameHandler.LOCAL_STORAGE_KEY);
+                document.querySelectorAll('.uiverse-input.form-control').forEach(input => input.value = '');
+                document.querySelectorAll('.form-check-input').forEach(cb => cb.checked = false);
+            });
+        }
+    }
+};
+
+
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('restaurant-form');
     const loadingIndicator = document.getElementById('loading');
@@ -6,7 +74,61 @@ document.addEventListener('DOMContentLoaded', function() {
     const addRestaurantBtn = document.getElementById('add-restaurant-btn');
     const restaurantInputsContainer = document.getElementById('restaurant-inputs');
 
-    let currentPreferences = new Map(); // Store current DB state of preferences
+    // Username fields for "Get Recommendations" tab
+    const nameInput = document.getElementById('name');
+    const nameCharCount = document.getElementById('name-char-count');
+    const nameValidationIndicator = document.getElementById('name-validation-indicator');
+    const rememberMeCheckbox = document.getElementById('remember-me');
+
+    // Username fields for "Preferences" tab
+    const userNameInput = document.getElementById('user-name');
+    const userNameCharCount = document.getElementById('user-name-char-count');
+    const userNameValidationIndicator = document.getElementById('user-name-validation-indicator');
+    const rememberMePrefsCheckbox = document.getElementById('remember-me-prefs');
+
+    let currentPreferences = new Map();
+
+    // --- Initial Load ---
+
+    const rememberedName = UsernameHandler.loadRemembered(nameInput, rememberMeCheckbox);
+    if(rememberedName) {
+        UsernameHandler.loadRemembered(userNameInput, rememberMePrefsCheckbox);
+        UsernameHandler.validate(nameInput, nameCharCount, nameValidationIndicator);
+        UsernameHandler.validate(userNameInput, userNameCharCount, userNameValidationIndicator);
+        UsernameHandler.createStatusAlert(rememberedName, 'user-status-alert');
+    }
+
+    // --- Event Listeners for Username Inputs ---
+
+    function setupUsernameValidation(input, charCount, indicator) {
+        input.addEventListener('input', () => {
+            UsernameHandler.validate(input, charCount, indicator);
+        });
+    }
+    
+    setupUsernameValidation(nameInput, nameCharCount, nameValidationIndicator);
+    setupUsernameValidation(userNameInput, userNameCharCount, userNameValidationIndicator);
+
+    // Sync checkboxes
+    rememberMeCheckbox.addEventListener('change', () => {
+        rememberMePrefsCheckbox.checked = rememberMeCheckbox.checked;
+        // Also sync the other name field
+        userNameInput.value = nameInput.value;
+        UsernameHandler.validate(userNameInput, userNameCharCount, userNameValidationIndicator);
+    });
+    rememberMePrefsCheckbox.addEventListener('change', () => {
+        rememberMeCheckbox.checked = rememberMePrefsCheckbox.checked;
+    });
+
+    // Sync name fields
+    nameInput.addEventListener('input', () => {
+        userNameInput.value = nameInput.value;
+        UsernameHandler.validate(userNameInput, userNameCharCount, userNameValidationIndicator);
+    });
+    userNameInput.addEventListener('input', () => {
+        nameInput.value = userNameInput.value;
+        UsernameHandler.validate(nameInput, nameCharCount, nameValidationIndicator);
+    });
 
     // --- Autocomplete and Dynamic Inputs ---
 
@@ -115,7 +237,10 @@ document.addEventListener('DOMContentLoaded', function() {
         event.preventDefault();
         loadingIndicator.style.display = 'block';
 
-        const name = document.getElementById('name').value;
+        const rawName = document.getElementById('name').value;
+        const name = UsernameHandler.sanitize(rawName);
+        UsernameHandler.remember(name, rememberMeCheckbox);
+        
         const city = document.getElementById('city').value;
         
         // Collect place IDs and names from the restaurant inputs
@@ -183,7 +308,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const fetchRestaurantsBtn = document.getElementById('fetch-restaurants');
     const savePreferencesBtn = document.getElementById('save-preferences');
     const restaurantList = document.getElementById('restaurant-list');
-    const userNameInput = document.getElementById('user-name');
 
     if (fetchRestaurantsBtn) {
         // Initially hide the savePreferencesBtn
@@ -191,8 +315,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Add event listener to userNameInput to enable/disable fetchRestaurantsBtn
         userNameInput.addEventListener('input', function() {
-            const userName = userNameInput.value.trim();
-            if (userName) {
+            const userName = UsernameHandler.sanitize(userNameInput.value);
+            if (UsernameHandler.validate(userNameInput, userNameCharCount, userNameValidationIndicator)) {
                 fetchRestaurantsBtn.disabled = false;
                 fetchRestaurantsBtn.classList.add('btn-primary');
                 fetchRestaurantsBtn.classList.remove('btn-secondary');
@@ -204,11 +328,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         fetchRestaurantsBtn.addEventListener('click', function() {
-            const userName = userNameInput.value.trim();
+            const rawUserName = userNameInput.value;
+            const userName = UsernameHandler.sanitize(rawUserName);
             if (!userName) {
                 alert('Please enter your name');
                 return;
             }
+            UsernameHandler.remember(userName, rememberMePrefsCheckbox);
 
             // Fetch restaurants from the server
             fetch('/get_restaurants')
@@ -321,7 +447,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (savePreferencesBtn) {
         savePreferencesBtn.addEventListener('click', function() {
-            const userName = userNameInput.value.trim();
+            const rawUserName = userNameInput.value;
+            const userName = UsernameHandler.sanitize(rawUserName);
             if (!userName) {
                 alert('Please enter your name');
                 return;

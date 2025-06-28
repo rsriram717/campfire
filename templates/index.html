@@ -14,7 +14,7 @@
 <header class="bg-primary text-white text-center py-4">
     <h1 class="display-4">Campfire</h1>
     <div class="subtitle mt-3 mb-2">
-        <p class="lead">Because food is about more than just food</p>
+        <p class="lead">More than just a meal</p>
     </div>
 </header>
 
@@ -35,7 +35,18 @@
             <form id="restaurant-form" class="mt-4">
                 <div class="form-group">
                     <label for="name">Name:</label>
-                    <input type="text" id="name" placeholder="Enter your name" required class="uiverse-input">
+                    <small class="form-text text-muted mb-2">This name saves your preferences for next time. Use the same name on future visits to get recommendations tailored to you.</small>
+                    <div class="input-group">
+                        <input type="text" id="name" placeholder="Enter your name" required class="uiverse-input form-control" minlength="2" maxlength="50" pattern="[a-zA-Z0-9-'\s]+">
+                        <div class="input-group-append">
+                            <span class="input-group-text" id="name-validation-indicator"></span>
+                        </div>
+                    </div>
+                    <small id="name-char-count" class="form-text text-muted"></small>
+                    <div class="form-check mt-2">
+                        <input type="checkbox" class="form-check-input" id="remember-me">
+                        <label class="form-check-label" for="remember-me">Remember me</label>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -100,8 +111,20 @@
             <div class="mt-4">
                 <div class="form-group">
                     <label for="user-name">Name:</label>
-                    <input type="text" id="user-name" placeholder="Enter your name" class="uiverse-input">
+                    <small class="form-text text-muted mb-2">This name saves your preferences for next time. Use the same name on future visits to get recommendations tailored to you.</small>
+                    <div class="input-group">
+                        <input type="text" id="user-name" placeholder="Enter your name" class="uiverse-input form-control" minlength="2" maxlength="50" pattern="[a-zA-Z0-9-'\s]+">
+                        <div class="input-group-append">
+                            <span class="input-group-text" id="user-name-validation-indicator"></span>
+                        </div>
+                    </div>
+                    <small id="user-name-char-count" class="form-text text-muted"></small>
+                    <div class="form-check mt-2">
+                        <input type="checkbox" class="form-check-input" id="remember-me-prefs">
+                        <label class="form-check-label" for="remember-me-prefs">Remember me</label>
+                    </div>
                 </div>
+                <div id="user-status-alert"></div>
                 <div class="d-flex justify-content-between">
                     <button id="fetch-restaurants" class="btn btn-secondary">Show Restaurants</button>
                     <button id="save-preferences" class="btn btn-secondary" disabled>Save Preferences</button>

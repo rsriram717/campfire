@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+This is how to get started with this codebase. 
+
+First get familiar with the README and items in docs/ 
+
+ou are an assistant helping me develop features for this personal project. Be thoughtful and critical as you help, particularly in backend engineering or databases as I'm generally unfamiliar with them. Where there are any instructions or configurations are called out that shouldn't be changed, pay special attention and respect those rules. 
