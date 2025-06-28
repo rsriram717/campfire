@@ -13,7 +13,7 @@ import pdb
 import logging
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import Enum, DateTime, inspect
+from sqlalchemy import Enum, DateTime, inspect, text
 from supabase import create_client, Client
 
 from services import places_service
@@ -99,28 +99,44 @@ if ENVIRONMENT == 'production':
         logging.info("Running database migrations...")
         with app.app_context():
             # Check if tables exist first
-            from sqlalchemy import inspect
+            from sqlalchemy import inspect, text
             inspector = inspect(db.engine)
             existing_tables = inspector.get_table_names()
             logging.info(f"Found existing tables: {existing_tables}")
             
-            if not existing_tables:
-                # Only create tables if none exist
-                logging.info("No tables found. Creating initial schema...")
-                db.create_all()
-            else:
-                logging.info("Tables already exist, skipping initial creation")
+            # Check if alembic_version table exists and has our initial migration
+            initial_migration_id = 'c9e344f09bd8'  # from our initial migration file
+            has_alembic = 'alembic_version' in existing_tables
+            should_run_migrations = True
             
-            # Run any pending migrations
-            try:
-                from flask_migrate import upgrade
-                upgrade()
-                logging.info("Database migrations completed successfully")
-            except Exception as e:
-                if 'relation already exists' in str(e):
-                    logging.info("Tables already up to date")
+            if has_alembic:
+                # Check if our initial migration is recorded
+                with db.engine.connect() as conn:
+                    result = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+                    if result == initial_migration_id:
+                        logging.info("Initial migration already applied, skipping migrations")
+                        should_run_migrations = False
+            
+            if should_run_migrations:
+                if not existing_tables:
+                    # Only create tables if none exist
+                    logging.info("No tables found. Creating initial schema...")
+                    db.create_all()
+                    
+                    # Record our initial migration
+                    if not has_alembic:
+                        with db.engine.connect() as conn:
+                            conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
+                            conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES ('{initial_migration_id}')"))
+                            conn.commit()
+                    logging.info("Recorded initial migration")
                 else:
-                    raise
+                    logging.info("Tables exist but migrations not recorded. Recording initial state...")
+                    if not has_alembic:
+                        with db.engine.connect() as conn:
+                            conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
+                            conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES ('{initial_migration_id}')"))
+                            conn.commit()
             
             # Verify final table state
             tables = inspector.get_table_names()
