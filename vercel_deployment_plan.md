@@ -1,145 +1,151 @@
 # Vercel Deployment Implementation Plan
 
-## Current Issues
-1. `sh: line 1: pip: command not found` - Python environment not properly initialized
-2. Warning about `builds` in configuration overriding project settings
-3. Database migrations failing to run during deployment
-4. Environment variables not properly accessible during build
+## Evolution of Deployment Strategy
 
-## Solution Strategy
+Our deployment strategy has evolved through several iterations, each teaching us important lessons about Vercel's Python deployment:
 
-### 1. Project Configuration
-- **Keep** a minimal `vercel.json` so Vercel always selects the Python builder and we avoid the "builds overriding project settings" warning.
-  ```json
-  {
-    "builds": [
-      { "src": "app.py", "use": "@vercel/python", "config": { "buildCommand": "./build.sh" } }
-    ],
-    "routes": [
-      { "src": "/(.*)", "dest": "app.py" }
-    ]
-  }
-  ```
-- In the Vercel dashboard set **Framework Preset** to "Other" (builder already handled by the file).
-- Leave the **Install Command** field **blank** – `build.sh` will handle dependency installation.
-- Set **Build Command** to `./build.sh` (redundant but harmless; Vercel will run it from the builder config).
+1. Initial Approach (with build.sh):
+   - Used a build.sh script for dependency installation and migrations
+   - Complex vercel.json with builds configuration
+   - Migrations handled during build time
 
-### 2. Python Environment Setup
-- Rely on Vercel's default Python 3.12 runtime (no `runtime.txt` or `.python-version` needed).
-- Ensure `requirements.txt` has pinned or caret-pinned versions as currently committed.
+2. Current Simplified Approach:
+   - Removed build.sh in favor of simpler configuration
+   - Streamlined vercel.json
+   - Migrations handled during application startup
 
-### 3. Build Process (build.sh)
-Update `build.sh` (snippet shown only for additions):
-```bash
-#!/bin/bash
-set -e
-# ... existing debug lines ...
+## Current Configuration
 
-# Verify environment variables
-required_vars=(
-  "DATABASE_URL" "SUPABASE_URL" "SUPABASE_KEY" "FLASK_ENV" \
-  "OPENAI_API_KEY"
-)
-# ... existing loop ...
+### 1. vercel.json
+The minimal but complete configuration:
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
+    }
+  ]
+}
 ```
-- **Only** `build.sh` installs requirements; dashboard Install Command remains blank to avoid double install.
 
-### 4. Development/Production Configuration
-Update `app.py` to handle database configuration more robustly:
+### 2. Application Configuration (app.py)
+Key components:
 ```python
-# Database configuration
+# Initialize Flask app with writable instance path for Vercel
+app = Flask(__name__, instance_path='/tmp/instance')
+
+# Configure database based on environment
 ENVIRONMENT = os.getenv('FLASK_ENV', 'development')
 if ENVIRONMENT == 'production':
-    # Verify all required environment variables
-    required_vars = ['SUPABASE_URL', 'SUPABASE_KEY', 'DATABASE_URL']
-    missing_vars = [var for var in required_vars if not os.getenv(var)]
-    if missing_vars:
-        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+    # Use POSTGRES_URL from Vercel integration, fallback to DATABASE_URL
+    DATABASE_URL = os.getenv('POSTGRES_URL') or os.getenv('DATABASE_URL')
     
+    # Run migrations during app startup in production
     try:
-        # Initialize Supabase client
-        supabase: Client = create_client(
-            os.getenv('SUPABASE_URL'),
-            os.getenv('SUPABASE_KEY')
-        )
-        # Configure SQLAlchemy
-        app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-        logging.info("Successfully configured Supabase connection")
+        logging.info("Running database migrations...")
+        from flask_migrate import upgrade
+        with app.app_context():
+            upgrade()
+        logging.info("Database migrations completed successfully")
     except Exception as e:
-        logging.error(f"Failed to initialize Supabase: {str(e)}")
-        raise
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/restaurant_recommendations.db'
-    logging.info("Using SQLite database for development")
+        logging.error(f"Database migration failed: {str(e)}")
+        # Don't raise here - let the app start even if migrations fail
 ```
 
-### 5. Implementation Steps
+## Required Environment Variables
 
-1. **Cleanup**:
-   ```bash
-   # Remove legacy files
-   rm -f runtime.txt              # not needed anymore
-   # If an old vercel.json existed, replace it with the minimal version above
-   ```
+1. Database Configuration:
+   - `POSTGRES_URL` (primary) or `DATABASE_URL` (fallback)
+   - Set automatically by Vercel-Supabase integration
 
-2. **Create/Update Files**:
-   - Overwrite `vercel.json` with the minimal content above
-   - Update `build.sh` with extended env-var checks and ensure it has `chmod +x build.sh`
+2. Supabase Configuration:
+   - `SUPABASE_URL`
+   - `SUPABASE_KEY`
+   - Set automatically by Vercel-Supabase integration
 
-3. **Vercel Dashboard Configuration**:
+3. Application Configuration:
+   - `FLASK_ENV=production`
+   - `OPENAI_API_KEY`
+   - Must be manually set in Vercel dashboard
+
+## Deployment Steps
+
+1. **Vercel Dashboard Configuration**:
    - Framework Preset → "Other"
-   - Build Command → `./build.sh`
+   - Build Command → (leave blank)
    - Install Command → (leave blank)
    - Output Directory → `./` (default)
-   - Ensure Environment Variables:
-     - `FLASK_ENV=production`
-     - `DATABASE_URL`
-     - `SUPABASE_URL`
-     - `SUPABASE_KEY`
-     - `OPENAI_API_KEY`
 
-4. **Testing**:
-   - Test build script locally:
-     ```bash
-     export FLASK_ENV=production
-     export DATABASE_URL="your_supabase_url"
-     export SUPABASE_URL="your_supabase_url"
-     export SUPABASE_KEY="your_supabase_key"
-     ./build.sh
-     ```
-   - Verify migrations run successfully
-   - Check application starts locally
+2. **Environment Variables**:
+   - Verify all required variables are set in both Production and Preview environments
+   - Double-check Supabase integration variables are properly set
 
-5. **Deployment**:
+3. **Deployment**:
    - Push changes to GitHub
-   - Monitor Vercel build logs for each step
-   - Verify environment variables in Vercel dashboard
-   - Test deployed application endpoints
+   - Monitor Vercel build logs
+   - Verify application starts correctly
+   - Test deployed endpoints
 
-### 6. Rollback Plan
-If deployment fails:
-1. Revert to last working commit
-2. Restore previous Vercel configuration
-3. Document specific failure point for further investigation
+## Troubleshooting Guide
+
+### Common Issues and Solutions
+
+1. **Application Downloads Instead of Running**:
+   - Verify vercel.json has proper version and builds configuration
+   - Check that @vercel/python builder is specified
+   - Ensure app.py is properly configured for WSGI
+
+2. **Database Connection Issues**:
+   - Verify Supabase integration in Vercel marketplace
+   - Check both POSTGRES_URL and DATABASE_URL are set
+   - Ensure using transaction pooler URL for Supabase
+
+3. **Migration Failures**:
+   - Check migration logs in application startup
+   - Verify database URL is correct
+   - Ensure all migrations are committed to repository
+
+### Key Learnings
+
+1. **Simplified Configuration is Better**:
+   - Removed build.sh in favor of built-in Vercel Python handling
+   - Migrations during app startup are more reliable than build-time
+   - Minimal vercel.json configuration reduces conflicts
+
+2. **Environment Variable Management**:
+   - Prefer Vercel integrations for automatic variable setup
+   - Use fallbacks for different variable names (e.g., POSTGRES_URL → DATABASE_URL)
+   - Always verify variables in both Production and Preview environments
+
+3. **Vercel-Specific Best Practices**:
+   - Use /tmp for writable paths
+   - Handle migrations gracefully during startup
+   - Keep configuration in vercel.json minimal but complete
 
 ## Success Criteria
-- Build completes successfully
-- No warnings in Vercel deployment logs
-- Migrations run successfully
-- Application responds to requests
+- Application serves properly (not downloading files)
+- Database migrations run successfully during startup
+- All routes respond correctly
 - Database queries work in production
+- Environment variables are properly accessible
 
 ## Monitoring
-- Watch build logs for Python version confirmation
-- Verify environment variables are accessible
-- Monitor database migration success
-- Check application logs for connection errors
+- Watch application startup logs for migration success
+- Monitor database connection status
+- Check for any file permission issues in /tmp
+- Verify environment variables are loaded correctly
 
-## Key Learnings & Troubleshooting
-
-### Vercel Build Configuration Precedence
-
-A critical issue encountered during this deployment was a conflict between the `vercel.json` file and the settings in the Vercel Dashboard UI.
-
-- **The Problem**: If a `builds` property exists in `vercel.json`, Vercel **completely ignores** the "Build & Development Settings" configured in the Project Settings UI. This means our `./build.sh` script was not being executed, causing silent failures where dependencies were not installed and database migrations did not run.
-- **The Solution**: For a Python project where we need a custom build script, the most reliable configuration is to **remove the `builds` object from `vercel.json` entirely**. This forces Vercel to respect the settings configured in the UI, ensuring our `Build Command` (`./build.sh`) and `Install Command` (left blank) are correctly used. 
+## Rollback Plan
+If deployment fails:
+1. Revert to last working commit
+2. Verify vercel.json configuration
+3. Check environment variables
+4. Review application logs for specific failure points 

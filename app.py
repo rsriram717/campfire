@@ -394,10 +394,8 @@ def autocomplete():
     
     return jsonify(results)
 
+# This is required for Vercel deployment
+app.debug = True
+
 if __name__ == '__main__':
-    debug_mode = os.getenv('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
-    port = int(os.getenv('FLASK_PORT', 5001))
-    host = os.getenv('FLASK_HOST', '127.0.0.1')
-    
-    print(f'Starting Campfire application on {host}:{port} (debug={debug_mode})')
-    app.run(debug=debug_mode, host=host, port=port)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 3000)))
