@@ -13,7 +13,7 @@ import pdb
 import logging
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import Enum, DateTime
+from sqlalchemy import Enum, DateTime, inspect
 from supabase import create_client, Client
 
 from services import places_service
@@ -84,14 +84,22 @@ logging.basicConfig(
 if ENVIRONMENT == 'production':
     try:
         logging.info("Running database migrations...")
-        from flask_migrate import upgrade
         with app.app_context():
+            # Create all tables if they don't exist
+            db.create_all()
+            # Then run migrations
+            from flask_migrate import upgrade
             upgrade()
+            # Verify tables exist
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            logging.info(f"Available tables after migration: {tables}")
         logging.info("Database migrations completed successfully")
     except Exception as e:
         logging.error(f"Database migration failed: {str(e)}")
-        # Don't raise here - let the app start even if migrations fail
-        # This prevents the app from crashing if migrations have already been run
+        # In production, we want to know if migrations fail
+        if ENVIRONMENT == 'production':
+            raise
 
 # Debug: Check API key in deployment (remove after verification)
 api_key = os.getenv('OPENAI_API_KEY')
