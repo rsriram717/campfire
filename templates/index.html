@@ -54,35 +54,38 @@
                     <button type="button" id="add-restaurant-btn" class="btn btn-secondary btn-sm mt-2">+ Add Another</button>
                 </div>
 
-                <div class="form-group">
-                    <label>Restaurant Type (Optional):</label>
-                    <div class="d-flex">
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="type_casual" value="casual">
-                            <label class="form-check-label" for="type_casual">Casual</label>
+                <div class="form-group filter-section">
+                    <label>Restaurant Type</label>
+                    <div class="type-filter-group">
+                        <div class="type-filter-option">
+                            <input type="checkbox" id="type_casual" value="casual">
+                            <label for="type_casual">Casual</label>
                         </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="type_sitdown" value="sit-down">
-                            <label class="form-check-label" for="type_sitdown">Sit-down</label>
+                        <div class="type-filter-option">
+                            <input type="checkbox" id="type_sitdown" value="sit-down">
+                            <label for="type_sitdown">Sit-down</label>
                         </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="type_bar" value="bar">
-                            <label class="form-check-label" for="type_bar">Bar</label>
+                        <div class="type-filter-option">
+                            <input type="checkbox" id="type_bar" value="bar">
+                            <label for="type_bar">Bar</label>
                         </div>
                     </div>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-group col-md-6">
-                        <label for="city">City:</label>
-                        <select id="city" class="uiverse-select">
-                            <option value="Chicago">Chicago</option>
-                            <option value="New York">New York</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-6">
-                        <label for="neighborhood">Neighborhood (Optional):</label>
-                        <input type="text" id="neighborhood" placeholder="e.g. West Loop" class="uiverse-input">
+                <div class="form-group filter-section">
+                    <label>Location</label>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="city" class="sub-label">City</label>
+                            <select id="city" class="uiverse-select">
+                                <option value="Chicago">Chicago</option>
+                                <option value="New York">New York</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="neighborhood" class="sub-label">Neighborhood (Optional)</label>
+                            <input type="text" id="neighborhood" placeholder="e.g. West Loop" class="uiverse-input">
+                        </div>
                     </div>
                 </div>
                 
