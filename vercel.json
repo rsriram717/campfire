@@ -6,5 +6,6 @@
       "src": "/(.*)",
       "dest": "app.py"
     }
-  ]
+  ],
+  "framework": "python"
 } 
