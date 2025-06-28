@@ -1,11 +1,18 @@
 {
   "version": 2,
-  "buildCommand": "pip install -r requirements.txt && echo '>>> Dependencies installed' && PYTHONPATH=. FLASK_ENV=production flask db upgrade && echo '>>> Migrations completed'",
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python",
+      "config": {
+        "buildCommand": "./build.sh"
+      }
+    }
+  ],
   "routes": [
     {
       "src": "/(.*)",
       "dest": "app.py"
     }
-  ],
-  "framework": "python"
+  ]
 } 
