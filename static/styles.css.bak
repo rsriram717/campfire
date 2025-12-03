@@ -1,0 +1,333 @@
+:root {
+    --campfire-red: #B85042;
+    --campfire-orange: #E09F3E;
+    --campfire-yellow: #DDB892;
+    --campfire-dark: #2C1810;
+    --campfire-bg: #FFF5EB;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f8f9fa;
+}
+
+header.bg-primary {
+    background: linear-gradient(135deg, var(--campfire-dark), var(--campfire-red)) !important;
+}
+
+.uiverse-input, .uiverse-select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px;
+    color: #333;
+    background-color: #f0f0f0;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.uiverse-input:focus, .uiverse-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+
+.uiverse-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007bff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.3-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 10px top 50%;
+    background-size: 10px auto;
+}
+
+.loading {
+    text-align: center;
+    font-size: 1.2em;
+    color: #007bff;
+}
+
+.recommendations-output {
+    padding: 10px;
+    background-color: rgba(221, 184, 146, 0.2);
+    border-radius: 5px;
+}
+
+.preference-btn.active {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-group {
+    width: 100%;
+}
+
+.btn-group .btn {
+    flex: 1;
+}
+
+.custom-checkbox {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  background-color: #fff;
+  border: 2px solid #e8e8e8;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.custom-checkbox input {
+  visibility: hidden;
+  display: none;
+}
+
+.custom-checkbox .checkmark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  width: 12px;
+  height: 12px;
+  background-color: #4CAF50;
+  border-radius: 2px;
+  transition: all 0.3s;
+}
+
+.custom-checkbox input:checked ~ .checkmark {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.preference-container {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin-left: 2rem;
+}
+
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox-label {
+  font-size: 0.9rem;
+  color: #333;
+  user-select: none;
+}
+
+.preference-toggle {
+    display: inline-flex;
+    background: rgba(224, 159, 62, 0.1);
+    border-radius: 25px;
+    padding: 3px;
+    gap: 3px;
+}
+
+.preference-toggle button {
+    margin-left: 5px;
+    border-radius: 20px;
+    padding: 5px 15px;
+    border: 1px solid #ccc;
+    background-color: #f0f0f0;
+    transition: all 0.3s ease;
+}
+
+.preference-toggle button.active {
+    color: white;
+}
+
+.preference-toggle .like.active {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.preference-toggle .dislike.active {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.preference-toggle .neutral.active {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+header .subtitle {
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    max-width: 600px;
+    margin: 0 auto;
+    padding-top: 0.75rem;
+}
+
+header .subtitle p {
+    margin: 0;
+    font-size: 1.1rem;
+    font-style: italic;
+}
+
+.btn-primary {
+    background-color: var(--campfire-orange) !important;
+    border-color: var(--campfire-orange) !important;
+}
+
+.btn-primary:hover {
+    background-color: var(--campfire-red) !important;
+    border-color: var(--campfire-red) !important;
+}
+
+.btn-secondary {
+    background-color: var(--campfire-dark) !important;
+    border-color: var(--campfire-dark) !important;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--campfire-red) !important;
+    border-color: var(--campfire-orange) var(--campfire-orange) #fff !important;
+}
+
+.nav-tabs .nav-link:not(.active) {
+    color: var(--campfire-dark) !important;
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+    border-color: var(--campfire-yellow);
+}
+
+.card {
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.card-title {
+    font-weight: bold;
+}
+
+.restaurant-input-group {
+    display: flex;
+    align-items: center;
+}
+
+.restaurant-input-group .form-control {
+    flex-grow: 1;
+}
+
+.remove-restaurant-btn {
+    margin-left: 8px; /* Space between input and button */
+}
+
+/* Target the wrapper div that Awesomplete creates */
+.restaurant-input-group div.awesomplete {
+    flex-grow: 1; /* Make the library's container take up the space */
+    width: 100%; /* Ensure the container itself is full width */
+}
+
+/* Ensure the actual input field inside it is also full-width */
+.restaurant-input-group div.awesomplete > input {
+    width: 100% !important; /* Force full width with !important to override any library styles */
+}
+
+/* Ensure the dropdown list is also full width */
+.awesomplete > ul {
+    width: 100% !important; /* Force full width with !important */
+    max-width: none !important; /* Remove any max-width restrictions */
+    min-width: 100% !important; /* Ensure minimum width matches container */
+    left: 0 !important; /* Align with left edge */
+}
+
+/* Ensure form controls take full width */
+.form-control {
+    width: 100% !important;
+    max-width: none !important;
+}
+
+/* Container for the form to ensure proper spacing */
+#restaurant-form {
+    width: 100%;
+    max-width: 100%;
+    padding: 0 15px;
+}
+
+/* Ensure the restaurant inputs container takes full width */
+#restaurant-inputs {
+    width: 100%;
+}
+
+/* --- Validation --- */
+/* Remove Bootstrap's default validation icons */
+.form-control.is-valid, .was-validated .form-control:valid {
+    background-image: none !important;
+}
+
+.form-control.is-invalid, .was-validated .form-control:invalid {
+    background-image: none !important;
+}
+
+/* New Filter Section Styles */
+.filter-section {
+    background-color: #FFF9F1;
+    border: 1px solid var(--campfire-yellow);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.filter-section > label {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--campfire-dark);
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.type-filter-group {
+    display: flex;
+    gap: 10px;
+}
+
+.type-filter-option {
+    position: relative;
+    flex-grow: 1;
+}
+
+.type-filter-option input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.type-filter-option label {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: #fff;
+    color: var(--campfire-dark);
+}
+
+.type-filter-option input[type="checkbox"]:checked + label {
+    background-color: var(--campfire-orange);
+    color: white;
+    border-color: var(--campfire-orange);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.sub-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-weight: normal;
+}

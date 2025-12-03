@@ -1,6 +1,14 @@
 // script.js
 
-// --- Shared Username Logic ---
+// --- Constants & Config ---
+const NEIGHBORHOODS = {
+    'Chicago': ['West Loop', 'Wicker Park', 'Lincoln Park', 'River North', 'Logan Square', 'Pilsen', 'Gold Coast', 'Loop', 'Lakeview'],
+    'New York': ['Manhattan', 'Brooklyn', 'Williamsburg', 'SoHo', 'East Village', 'Tribeca', 'West Village', 'Upper East Side']
+};
+
+const RESTAURANT_TYPES = ['Casual', 'Sit-Down', 'Bar', 'Fine Dining', 'Cafe'];
+
+// --- Username Handling ---
 const UsernameHandler = {
     LOCAL_STORAGE_KEY: 'campfire_username',
 
@@ -9,507 +17,339 @@ const UsernameHandler = {
         return name.trim().replace(/\s+/g, ' ');
     },
 
-    validate: (inputElement, charCountElement) => {
-        const value = inputElement.value;
-        const sanitized = UsernameHandler.sanitize(value);
-        const isValid = inputElement.checkValidity() && sanitized.length >= 2;
-
-        // Update char counter
-        charCountElement.textContent = `${sanitized.length} / ${inputElement.maxLength}`;
-
-        // Update validation border
-        if (sanitized.length === 0) {
-            inputElement.classList.remove('is-valid', 'is-invalid');
-        } else if (isValid) {
-            inputElement.classList.add('is-valid');
-            inputElement.classList.remove('is-invalid');
-        } else {
-            inputElement.classList.add('is-invalid');
-            inputElement.classList.remove('is-valid');
-        }
-        return isValid;
+    load: () => {
+        return localStorage.getItem(UsernameHandler.LOCAL_STORAGE_KEY) || '';
     },
 
-    remember: (name, rememberCheckbox) => {
-        if (rememberCheckbox.checked) {
+    save: (name) => {
+        if (name) {
             localStorage.setItem(UsernameHandler.LOCAL_STORAGE_KEY, name);
-        } else {
-            localStorage.removeItem(UsernameHandler.LOCAL_STORAGE_KEY);
-        }
-    },
-    
-    loadRemembered: (inputElement, rememberCheckbox) => {
-        const rememberedName = localStorage.getItem(UsernameHandler.LOCAL_STORAGE_KEY);
-        if (rememberedName) {
-            inputElement.value = rememberedName;
-            rememberCheckbox.checked = true;
-            return rememberedName;
-        }
-        return null;
-    },
-
-    createStatusAlert: (rememberedName, alertContainerId) => {
-        const alertContainer = document.getElementById(alertContainerId);
-        if (alertContainer && rememberedName) {
-            alertContainer.innerHTML = `
-                <div class="alert alert-info alert-dismissible fade show" role="alert">
-                    Continuing as <strong>${rememberedName}</strong>. 
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close" id="clear-remembered-user">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>`;
-            
-            document.getElementById('clear-remembered-user').addEventListener('click', () => {
-                localStorage.removeItem(UsernameHandler.LOCAL_STORAGE_KEY);
-                document.querySelectorAll('.uiverse-input.form-control').forEach(input => input.value = '');
-                document.querySelectorAll('.form-check-input').forEach(cb => cb.checked = false);
-            });
+            updateHeaderUsername(name);
         }
     }
 };
 
-
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('restaurant-form');
-    const loadingIndicator = document.getElementById('loading');
-    const recommendationsOutput = document.getElementById('recommendations-output');
-    const addRestaurantBtn = document.getElementById('add-restaurant-btn');
-    const restaurantInputsContainer = document.getElementById('restaurant-inputs');
-
-    // Username fields for "Get Recommendations" tab
-    const nameInput = document.getElementById('name');
-    const nameCharCount = document.getElementById('name-char-count');
-    const rememberMeCheckbox = document.getElementById('remember-me');
-
-    // Username fields for "Preferences" tab
-    const userNameInput = document.getElementById('user-name');
-    const userNameCharCount = document.getElementById('user-name-char-count');
-    const rememberMePrefsCheckbox = document.getElementById('remember-me-prefs');
-
-    let currentPreferences = new Map();
-
-    // --- Initial Load ---
-
-    const rememberedName = UsernameHandler.loadRemembered(nameInput, rememberMeCheckbox);
-    if(rememberedName) {
-        UsernameHandler.loadRemembered(userNameInput, rememberMePrefsCheckbox);
-        UsernameHandler.validate(nameInput, nameCharCount);
-        UsernameHandler.validate(userNameInput, userNameCharCount);
-        UsernameHandler.createStatusAlert(rememberedName, 'user-status-alert');
+function updateHeaderUsername(name) {
+    const headerName = document.getElementById('header-user-name');
+    if (headerName && name) {
+        headerName.textContent = name;
     }
+}
 
-    // --- Event Listeners for Username Inputs ---
+// --- Tab Switching Logic ---
+function initTabs() {
+    const tabs = document.querySelectorAll('.nav-tab');
+    const panels = document.querySelectorAll('.tab-panel');
 
-    function setupUsernameValidation(input, charCount) {
-        input.addEventListener('input', () => {
-            UsernameHandler.validate(input, charCount);
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            // Deactivate all
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+
+            // Activate clicked
+            tab.classList.add('active');
+            const targetPanelId = `${tab.dataset.tab}-panel`;
+            document.getElementById(targetPanelId).classList.add('active');
         });
-    }
-    
-    setupUsernameValidation(nameInput, nameCharCount);
-    setupUsernameValidation(userNameInput, userNameCharCount);
-
-    // Sync checkboxes
-    rememberMeCheckbox.addEventListener('change', () => {
-        rememberMePrefsCheckbox.checked = rememberMeCheckbox.checked;
-        // Also sync the other name field
-        userNameInput.value = nameInput.value;
-        UsernameHandler.validate(userNameInput, userNameCharCount);
     });
-    rememberMePrefsCheckbox.addEventListener('change', () => {
-        rememberMeCheckbox.checked = rememberMePrefsCheckbox.checked;
+}
+
+// --- Autocomplete & Inputs ---
+function initializeAutocomplete(inputElement) {
+    const awesomplete = new Awesomplete(inputElement, {
+        minChars: 2,
+        autoFirst: true,
+        maxItems: 5
     });
 
-    // Sync name fields
-    nameInput.addEventListener('input', () => {
-        userNameInput.value = nameInput.value;
-        UsernameHandler.validate(userNameInput, userNameCharCount);
+    inputElement.addEventListener('keyup', function() {
+        const query = inputElement.value;
+        const city = document.getElementById('city').value;
+        if (query.length < 2) return;
+
+        fetch(`/autocomplete?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}`)
+            .then(res => res.json())
+            .then(data => {
+                awesomplete.list = data.map(r => ({ 
+                    label: `${r.name} (${r.address})`, 
+                    value: r.place_id 
+                }));
+            })
+            .catch(console.error);
     });
-    userNameInput.addEventListener('input', () => {
-        nameInput.value = nameInput.value;
-        UsernameHandler.validate(nameInput, nameCharCount);
+
+    inputElement.addEventListener('awesomplete-selectcomplete', function(event) {
+        const { label, value } = event.text;
+        const name = label.split(' (')[0];
+        this.value = name;
+        // Update hidden place_id input in same wrapper
+        const wrapper = this.closest('.input-field-wrapper');
+        wrapper.querySelector('input[name="place_id"]').value = value;
+    });
+}
+
+// --- Dynamic Dropdowns ---
+function initDropdowns() {
+    const citySelect = document.getElementById('city');
+    const neighborhoodSelect = document.getElementById('neighborhood');
+    const typeSelect = document.getElementById('restaurant-type-dropdown');
+
+    // Populate Restaurant Types
+    typeSelect.innerHTML = '<option value="">Restaurant Type</option>';
+    RESTAURANT_TYPES.forEach(type => {
+        typeSelect.innerHTML += `<option value="${type.toLowerCase()}">${type}</option>`;
     });
 
-    // --- Autocomplete and Dynamic Inputs ---
-
-    const MAX_RESTAURANTS = 5;
-
-    function updateRemoveButtons() {
-        const groups = restaurantInputsContainer.querySelectorAll('.restaurant-input-group');
-        groups.forEach((group, index) => {
-            const button = group.querySelector('.remove-restaurant-btn');
-            if (button) {
-                // Show button only if there is more than one input, or hide if it's the last one
-                button.style.display = groups.length > 1 ? 'inline-block' : 'none';
-            }
-        });
-    }
-
-    function initializeAutocomplete(inputElement) {
-        console.log("Initializing autocomplete for:", inputElement); // Diagnostic log
-        const awesomplete = new Awesomplete(inputElement, {
-            minChars: 2,
-            autoFirst: true,
-        });
-
-        inputElement.addEventListener('keyup', function(event) {
-            const query = inputElement.value;
-            const city = document.getElementById('city').value;
-            if (query.length < 2) return;
-
-            fetch(`/autocomplete?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}`)
-                .then(response => {
-                    if (!response.ok) {
-                        // For 500 errors, etc., the response body might have our specific error message
-                        return response.json().then(err => Promise.reject(err));
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    awesomplete.list = data.map(r => ({ label: `${r.name} (${r.address})`, value: r.place_id }));
-                })
-                .catch(error => {
-                    console.error('Autocomplete Error:', error.error || 'A network or server error occurred.');
-                    awesomplete.list = []; // Clear suggestions on error
-                });
-        });
-
-        inputElement.addEventListener('awesomplete-selectcomplete', function(event) {
-            const { label, value } = event.text;
-            const placeId = value;
-            const name = label.split(' (')[0];
-
-            this.value = name; // Set visible input to just the name
-            this.closest('.restaurant-input-group').querySelector('input[name="place_id"]').value = placeId;
-        });
-    }
-
-    function updateAddButtonState() {
-        const count = restaurantInputsContainer.querySelectorAll('.restaurant-input-group').length;
-        addRestaurantBtn.disabled = count >= MAX_RESTAURANTS;
-    }
-
-    addRestaurantBtn.addEventListener('click', function() {
-        const count = restaurantInputsContainer.querySelectorAll('.restaurant-input-group').length;
-        if (count >= MAX_RESTAURANTS) return;
-
-        const newInputGroupHTML = `
-            <div class="restaurant-input-group mt-2">
-                <div class="awesomplete">
-                    <input type="text" name="restaurant_name" placeholder="Start typing a restaurant name..." class="form-control">
-                </div>
-                <input type="hidden" name="place_id">
-                <button type="button" class="btn btn-danger remove-restaurant-btn">
-                    <i class="bi bi-x-circle"></i>
-                </button>
-            </div>`;
-        restaurantInputsContainer.insertAdjacentHTML('beforeend', newInputGroupHTML);
+    // Handle City Change
+    citySelect.addEventListener('change', function() {
+        const city = this.value;
+        neighborhoodSelect.innerHTML = '<option value="">Neighborhood</option>';
         
-        const newInputGroups = restaurantInputsContainer.querySelectorAll('.restaurant-input-group');
-        const latestInputGroup = newInputGroups[newInputGroups.length - 1];
-        const latestInput = latestInputGroup.querySelector('input[name="restaurant_name"]');
-        initializeAutocomplete(latestInput);
-        
-        updateAddButtonState();
-        updateRemoveButtons();
-    });
-    
-    restaurantInputsContainer.addEventListener('click', function(event) {
-        if (event.target.classList.contains('remove-restaurant-btn')) {
-            event.target.closest('.restaurant-input-group').remove();
-            updateAddButtonState();
-            updateRemoveButtons();
+        if (NEIGHBORHOODS[city]) {
+            NEIGHBORHOODS[city].forEach(n => {
+                neighborhoodSelect.innerHTML += `<option value="${n}">${n}</option>`;
+            });
         }
     });
 
-    // Initialize for the first input, which is now pre-wrapped
-    const firstInput = document.querySelector('#restaurant-inputs input[name="restaurant_name"]');
-    if (firstInput) {
-        initializeAutocomplete(firstInput);
-    }
+    // Trigger initial population
+    citySelect.dispatchEvent(new Event('change'));
+}
+
+// --- Recommendations Logic ---
+function renderRecommendations(recommendations) {
+    const container = document.getElementById('recommendations-output');
     
-    updateAddButtonState();
-    updateRemoveButtons(); // Call on load to set initial state
+    if (!recommendations || recommendations.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <p>No recommendations found. Try adjusting your inputs.</p>
+            </div>`;
+        return;
+    }
 
-    // --- Form Submission ---
+    container.innerHTML = recommendations.map(rec => `
+        <div class="recommendation-card">
+            <h3 class="restaurant-name">${rec.name}</h3>
+            <p class="recommendation-reason">
+                <span class="reason-label">Why it's recommended:</span> ${rec.description}
+            </p>
+            <div class="card-actions">
+                <button class="action-btn like-btn" data-restaurant="${rec.name}" title="Like">
+                    <i class="bi bi-hand-thumbs-up"></i>
+                </button>
+                <button class="action-btn dislike-btn" data-restaurant="${rec.name}" title="Dislike">
+                    <i class="bi bi-hand-thumbs-down"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
 
-    form.addEventListener('submit', function(event) {
-        event.preventDefault();
-        loadingIndicator.style.display = 'block';
+    // Attach listeners to new buttons
+    attachCardListeners();
+}
 
-        const rawName = document.getElementById('name').value;
-        const name = UsernameHandler.sanitize(rawName);
-        UsernameHandler.remember(name, rememberMeCheckbox);
-        
-        const city = document.getElementById('city').value;
-        
-        // Collect place IDs and names from the restaurant inputs
-        const restaurantInputs = document.querySelectorAll('.restaurant-input-group');
-        const placeIds = [];
-        const restaurantNames = [];
-        restaurantInputs.forEach(group => {
-            const placeId = group.querySelector('input[name="place_id"]').value;
-            const restaurantName = group.querySelector('input[name="restaurant_name"]').value;
-            if (placeId) {
-                placeIds.push(placeId);
-            } else if (restaurantName) {
-                restaurantNames.push(restaurantName);
-            }
-        });
+function attachCardListeners() {
+    document.querySelectorAll('.recommendation-card .action-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            // toggle active state visually
+            const isLike = this.classList.contains('like-btn');
+            const parent = this.closest('.card-actions');
+            
+            parent.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
 
-        // Collect selected restaurant types
-        const restaurantTypes = [];
-        document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
-            restaurantTypes.push(checkbox.value);
-        });
-
-        const neighborhood = document.getElementById('neighborhood').value;
-
-        // Make the API call to the backend
-        fetch('/get_recommendations', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                user: name,
-                place_ids: placeIds, 
-                input_restaurants: restaurantNames,
-                city: city,
-                neighborhood: neighborhood,
-                restaurant_types: restaurantTypes
-            }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.recommendations) {
-                recommendationsOutput.innerHTML = data.recommendations.map(rec => `
-                    <div class="card mb-3">
-                        <div class="card-body">
-                            <h5 class="card-title text-primary">${rec.name}</h5>
-                            <p class="card-text">${rec.description}</p>
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                recommendationsOutput.innerHTML = `<p>No recommendations found.</p>`;
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching recommendations:', error);
-            recommendationsOutput.innerHTML = `<p>Error fetching recommendations. Please try again later.</p>`;
-        })
-        .finally(() => {
-            loadingIndicator.style.display = 'none';
+            // Note: Actual persistence requires restaurant ID, which we might not have 
+            // for AI-generated results immediately unless we match them to DB.
+            // For now, just visual feedback.
         });
     });
+}
 
-    // Restaurant Preferences Tab Functionality
-    const fetchRestaurantsBtn = document.getElementById('fetch-restaurants');
-    const savePreferencesBtn = document.getElementById('save-preferences');
-    const restaurantList = document.getElementById('restaurant-list');
+// --- Form Submission ---
+function initForm() {
+    const form = document.getElementById('restaurant-form');
+    const loading = document.getElementById('loading');
+    const nameInput = document.getElementById('name');
 
-    if (fetchRestaurantsBtn) {
-        // Initially hide the savePreferencesBtn
-        savePreferencesBtn.style.display = 'none';
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        loading.style.display = 'flex';
 
-        // Add event listener to userNameInput to enable/disable fetchRestaurantsBtn
-        userNameInput.addEventListener('input', function() {
-            const userName = UsernameHandler.sanitize(userNameInput.value);
-            if (UsernameHandler.validate(userNameInput, userNameCharCount)) {
-                fetchRestaurantsBtn.disabled = false;
-                fetchRestaurantsBtn.classList.add('btn-primary');
-                fetchRestaurantsBtn.classList.remove('btn-secondary');
-            } else {
-                fetchRestaurantsBtn.disabled = true;
-                fetchRestaurantsBtn.classList.add('btn-secondary');
-                fetchRestaurantsBtn.classList.remove('btn-primary');
-            }
+        const name = UsernameHandler.sanitize(nameInput.value);
+        UsernameHandler.save(name);
+
+        // Collect inputs
+        const placeIds = [];
+        const inputRestaurants = [];
+        
+        document.querySelectorAll('.input-field-wrapper').forEach(wrapper => {
+            const nameVal = wrapper.querySelector('input[name="restaurant_name"]').value;
+            const idVal = wrapper.querySelector('input[name="place_id"]').value;
+            
+            if (idVal) placeIds.push(idVal);
+            else if (nameVal) inputRestaurants.push(nameVal);
         });
 
-        fetchRestaurantsBtn.addEventListener('click', function() {
-            const rawUserName = userNameInput.value;
-            const userName = UsernameHandler.sanitize(rawUserName);
-            if (!userName) {
-                alert('Please enter your name');
-                return;
-            }
-            UsernameHandler.remember(userName, rememberMePrefsCheckbox);
+        // Collect filters
+        const city = document.getElementById('city').value;
+        const neighborhood = document.getElementById('neighborhood').value;
+        const types = [];
+        
+        // Dropdown type
+        const dropType = document.getElementById('restaurant-type-dropdown').value;
+        if (dropType) types.push(dropType);
 
-            // Fetch restaurants from the server
-            fetch('/get_restaurants')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.restaurants) {
-                        const restaurantsHTML = data.restaurants.map(restaurant => `
-                            <div class="card mb-3">
-                                <div class="card-body d-flex justify-content-between align-items-center">
-                                    <h5 class="card-title mb-0">${restaurant.name}</h5>
-                                    <div class="preference-toggle" data-restaurant-id="${restaurant.id}">
-                                        <button type="button" class="like" data-preference="like">Like</button>
-                                        <button type="button" class="neutral" data-preference="neutral">Neutral</button>
-                                        <button type="button" class="dislike" data-preference="dislike">Dislike</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
-                        
-                        restaurantList.innerHTML = restaurantsHTML;
-                        savePreferencesBtn.style.display = 'block';
-
-                        // Add click handlers for preference toggles
-                        document.querySelectorAll('.preference-toggle').forEach(toggle => {
-                            toggle.querySelectorAll('button').forEach(button => {
-                                button.addEventListener('click', function() {
-                                    // Remove active class from all buttons in this toggle
-                                    toggle.querySelectorAll('button').forEach(btn => 
-                                        btn.classList.remove('active'));
-                                    // Add active class to clicked button
-                                    this.classList.add('active');
-                                    
-                                    // Check if any preferences have changed
-                                    let hasChanges = false;
-                                    document.querySelectorAll('.preference-toggle').forEach(t => {
-                                        const restaurantId = t.dataset.restaurantId;
-                                        const activeBtn = t.querySelector('button.active');
-                                        const currentPreference = activeBtn ? activeBtn.dataset.preference : 'neutral';
-                                        
-                                        if (currentPreference !== currentPreferences.get(restaurantId)) {
-                                            hasChanges = true;
-                                        }
-                                    });
-                                    
-                                    // Enable/disable save button based on changes
-                                    if (hasChanges) {
-                                        savePreferencesBtn.disabled = false;
-                                        savePreferencesBtn.classList.add('btn-primary');
-                                        savePreferencesBtn.classList.remove('btn-secondary');
-                                    } else {
-                                        savePreferencesBtn.disabled = true;
-                                        savePreferencesBtn.classList.add('btn-secondary');
-                                        savePreferencesBtn.classList.remove('btn-primary');
-                                    }
-                                });
-                            });
-                        });
-
-                        // Load existing preferences
-                        fetch(`/get_user_preferences?name=${encodeURIComponent(userName)}`)
-                            .then(response => response.json())
-                            .then(data => {
-                                // First set all restaurants to neutral and store initial state
-                                document.querySelectorAll('.preference-toggle').forEach(toggle => {
-                                    const restaurantId = toggle.dataset.restaurantId;
-                                    currentPreferences.set(restaurantId, 'neutral');
-                                    
-                                    const neutralButton = toggle.querySelector('button[data-preference="neutral"]');
-                                    if (neutralButton) {
-                                        neutralButton.classList.add('active');
-                                    }
-                                });
-
-                                // Then apply stored preferences
-                                if (data.preferences) {
-                                    data.preferences.forEach(pref => {
-                                        const toggle = document.querySelector(
-                                            `.preference-toggle[data-restaurant-id="${pref.restaurant_id}"]`
-                                        );
-                                        if (toggle) {
-                                            // Store the current preference
-                                            currentPreferences.set(pref.restaurant_id.toString(), pref.preference);
-                                            
-                                            // Remove neutral state first
-                                            toggle.querySelector('button[data-preference="neutral"]')?.classList.remove('active');
-                                            // Set stored preference
-                                            const button = toggle.querySelector(
-                                                `button[data-preference="${pref.preference}"]`
-                                            );
-                                            if (button) {
-                                                button.classList.add('active');
-                                            }
-                                        }
-                                    });
-                                }
-                                
-                                // Initially disable save button
-                                savePreferencesBtn.disabled = true;
-                                savePreferencesBtn.classList.add('btn-secondary');
-                                savePreferencesBtn.classList.remove('btn-primary');
-                            });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    restaurantList.innerHTML = '<p class="text-danger">Error loading restaurants</p>';
-                });
+        // Toggle types
+        document.querySelectorAll('.toggle-input:checked').forEach(cb => {
+            types.push(cb.value);
         });
-    }
 
-    if (savePreferencesBtn) {
-        savePreferencesBtn.addEventListener('click', function() {
-            const rawUserName = userNameInput.value;
-            const userName = UsernameHandler.sanitize(rawUserName);
-            if (!userName) {
-                alert('Please enter your name');
-                return;
-            }
-
-            // Collect all preferences that have changed from their current state
-            const preferences = [];
-            document.querySelectorAll('.preference-toggle').forEach(toggle => {
-                const restaurantId = toggle.dataset.restaurantId;
-                const activeButton = toggle.querySelector('button.active');
-                const newPreference = activeButton ? activeButton.dataset.preference : 'neutral';
-                const currentPreference = currentPreferences.get(restaurantId);
-
-                // Only include if the preference has changed
-                if (newPreference !== currentPreference) {
-                    preferences.push({
-                        restaurant_id: parseInt(restaurantId),
-                        preference: newPreference
-                    });
-                }
-            });
-
-            console.log('Saving preferences:', preferences);
-
-            // Save to server
-            fetch('/save_preferences', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    user_name: userName,
-                    preferences: preferences
-                })
+        // API Call
+        fetch('/get_recommendations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user: name,
+                city: city,
+                neighborhood: neighborhood,
+                place_ids: placeIds,
+                input_restaurants: inputRestaurants,
+                restaurant_types: [...new Set(types)] // dedupe
             })
-            .then(response => response.json())
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            renderRecommendations(data.recommendations);
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('recommendations-output').innerHTML = `
+                <div class="empty-state" style="border-color: #ff4444;">
+                    <p>Error: ${err.message || 'Failed to get recommendations'}</p>
+                </div>`;
+        })
+        .finally(() => {
+            loading.style.display = 'none';
+        });
+    });
+}
+
+// --- Preferences Logic ---
+function initPreferences() {
+    const fetchBtn = document.getElementById('fetch-restaurants');
+    const saveBtn = document.getElementById('save-preferences');
+    const listContainer = document.getElementById('restaurant-list');
+    const currentPreferences = new Map();
+
+    fetchBtn.addEventListener('click', () => {
+        const name = UsernameHandler.sanitize(document.getElementById('name').value);
+        if (!name) {
+            alert('Please enter your name in the main form first.');
+            // Switch to main tab
+            document.querySelector('[data-tab="recommendations"]').click();
+            document.getElementById('name').focus();
+            return;
+        }
+
+        fetch('/get_restaurants')
+            .then(res => res.json())
             .then(data => {
-                console.log('Server response:', data);
-                if (data.success) {
-                    // Update currentPreferences with new values
-                    document.querySelectorAll('.preference-toggle').forEach(toggle => {
-                        const restaurantId = toggle.dataset.restaurantId;
-                        const activeBtn = toggle.querySelector('button.active');
-                        const preference = activeBtn ? activeBtn.dataset.preference : 'neutral';
-                        currentPreferences.set(restaurantId, preference);
-                    });
-                    
-                    // Disable save button after successful save
-                    savePreferencesBtn.disabled = true;
-                    savePreferencesBtn.classList.add('btn-secondary');
-                    savePreferencesBtn.classList.remove('btn-primary');
-                    
-                    alert('Preferences saved successfully!');
-                } else {
-                    alert('Error: ' + (data.error || 'Failed to save preferences'));
+                if (data.restaurants) {
+                    renderPreferencesList(data.restaurants);
+                    loadUserPreferences(name);
+                    saveBtn.disabled = false;
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error saving preferences');
+            });
+    });
+
+    function renderPreferencesList(restaurants) {
+        listContainer.innerHTML = restaurants.map(r => `
+            <div class="preference-card">
+                <h5>${r.name}</h5>
+                <div class="preference-toggle" data-id="${r.id}">
+                    <button type="button" class="like" data-val="like">Like</button>
+                    <button type="button" class="neutral active" data-val="neutral">Neutral</button>
+                    <button type="button" class="dislike" data-val="dislike">Dislike</button>
+                </div>
+            </div>
+        `).join('');
+
+        // Attach toggle listeners
+        document.querySelectorAll('.preference-toggle button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const parent = this.parentElement;
+                parent.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
             });
         });
     }
+
+    function loadUserPreferences(name) {
+        fetch(`/get_user_preferences?name=${encodeURIComponent(name)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.preferences) {
+                    data.preferences.forEach(pref => {
+                        const toggle = document.querySelector(`.preference-toggle[data-id="${pref.restaurant_id}"]`);
+                        if (toggle) {
+                            toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                            toggle.querySelector(`button[data-val="${pref.preference}"]`)?.classList.add('active');
+                            currentPreferences.set(pref.restaurant_id, pref.preference);
+                        }
+                    });
+                }
+            });
+    }
+
+    saveBtn.addEventListener('click', () => {
+        const name = UsernameHandler.sanitize(document.getElementById('name').value);
+        const updates = [];
+
+        document.querySelectorAll('.preference-toggle').forEach(toggle => {
+            const id = parseInt(toggle.dataset.id);
+            const active = toggle.querySelector('button.active').dataset.val;
+            
+            // Only send if changed from initial/neutral
+            // (Simplification: just send all non-neutral or changed)
+            if (active !== 'neutral' || currentPreferences.get(id) !== 'neutral') {
+                 updates.push({ restaurant_id: id, preference: active });
+            }
+        });
+
+        fetch('/save_preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_name: name, preferences: updates })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) alert('Preferences saved!');
+        });
+    });
+}
+
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+    initTabs();
+    initDropdowns();
+    initForm();
+    initPreferences();
+
+    // Init autocomplete for all inputs
+    document.querySelectorAll('input[name="restaurant_name"]').forEach(initializeAutocomplete);
+
+    // Restore username
+    const savedName = UsernameHandler.load();
+    if (savedName) {
+        document.getElementById('name').value = savedName;
+        updateHeaderUsername(savedName);
+    }
+
+    // Sync name input to header
+    document.getElementById('name').addEventListener('input', (e) => {
+        updateHeaderUsername(e.target.value || 'Guest');
+    });
 });

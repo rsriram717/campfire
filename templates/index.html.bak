@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Recommendations</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+<header class="bg-primary text-white text-center py-4">
+    <h1 class="display-4">Campfire</h1>
+    <div class="subtitle mt-3 mb-2">
+        <p class="lead">More than just a meal</p>
+    </div>
+</header>
+
+<div class="container mt-5">
+    <!-- Nav tabs -->
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="recommendations-tab" data-toggle="tab" href="#recommendations" role="tab" aria-controls="recommendations" aria-selected="true">Get Recommendations</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="preferences-tab" data-toggle="tab" href="#preferences" role="tab" aria-controls="preferences" aria-selected="false">Restaurant Preferences</a>
+        </li>
+    </ul>
+
+    <!-- Tab panes -->
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="recommendations" role="tabpanel" aria-labelledby="recommendations-tab">
+            <form id="restaurant-form" class="mt-4">
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <small class="form-text text-muted mb-2">This name saves your preferences for next time. Use the same name on future visits to get recommendations tailored to you.</small>
+                    <input type="text" id="name" placeholder="Enter your name" required class="uiverse-input form-control" minlength="2" maxlength="50" pattern="[a-zA-Z0-9-'\s]+">
+                    <small id="name-char-count" class="form-text text-muted"></small>
+                    <div class="form-check mt-2">
+                        <input type="checkbox" class="form-check-input" id="remember-me">
+                        <label class="form-check-label" for="remember-me">Remember me</label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Favorite Restaurants:</label>
+                    <div id="restaurant-inputs">
+                        <div class="restaurant-input-group">
+                            <div class="awesomplete">
+                                <input type="text" name="restaurant_name" placeholder="Start typing a restaurant name..." class="form-control">
+                            </div>
+                            <input type="hidden" name="place_id">
+                            <button type="button" class="btn btn-danger remove-restaurant-btn">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" id="add-restaurant-btn" class="btn btn-secondary btn-sm mt-2">+ Add Another</button>
+                </div>
+
+                <div class="form-group filter-section">
+                    <label>Restaurant Type</label>
+                    <div class="type-filter-group">
+                        <div class="type-filter-option">
+                            <input type="checkbox" id="type_casual" value="casual">
+                            <label for="type_casual">Casual</label>
+                        </div>
+                        <div class="type-filter-option">
+                            <input type="checkbox" id="type_sitdown" value="sit-down">
+                            <label for="type_sitdown">Sit-down</label>
+                        </div>
+                        <div class="type-filter-option">
+                            <input type="checkbox" id="type_bar" value="bar">
+                            <label for="type_bar">Bar</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group filter-section">
+                    <label>Location</label>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="city" class="sub-label">City</label>
+                            <select id="city" class="uiverse-select">
+                                <option value="Chicago">Chicago</option>
+                                <option value="New York">New York</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="neighborhood" class="sub-label">Neighborhood (Optional)</label>
+                            <input type="text" id="neighborhood" placeholder="e.g. West Loop" class="uiverse-input">
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">Get Recommendations</button>
+                <div id="loading" class="loading mt-3" style="display: none;">Loading...</div>
+            </form>
+
+            <div id="recommendations-output" class="recommendations-output mt-4"></div>
+        </div>
+        <div class="tab-pane fade" id="preferences" role="tabpanel" aria-labelledby="preferences-tab">
+            <!-- Restaurant Preferences Content -->
+            <div class="mt-4">
+                <div class="form-group">
+                    <label for="user-name">Name:</label>
+                    <small class="form-text text-muted mb-2">This name saves your preferences for next time. Use the same name on future visits to get recommendations tailored to you.</small>
+                    <input type="text" id="user-name" placeholder="Enter your name" class="uiverse-input form-control" minlength="2" maxlength="50" pattern="[a-zA-Z0-9-'\s]+">
+                    <small id="user-name-char-count" class="form-text text-muted"></small>
+                    <div class="form-check mt-2">
+                        <input type="checkbox" class="form-check-input" id="remember-me-prefs">
+                        <label class="form-check-label" for="remember-me-prefs">Remember me</label>
+                    </div>
+                </div>
+                <div id="user-status-alert"></div>
+                <div class="d-flex justify-content-between">
+                    <button id="fetch-restaurants" class="btn btn-secondary">Show Restaurants</button>
+                    <button id="save-preferences" class="btn btn-secondary" disabled>Save Preferences</button>
+                </div>
+                <div id="restaurant-list" class="mt-4">
+                    <!-- Restaurants with checkboxes will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
