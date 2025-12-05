@@ -5,69 +5,145 @@ import requests
 from typing import List, Dict, Optional
 from .places import PlacesService
 
+import logging
+import uuid
+
+# City coordinates for location biasing (Lat, Lng)
+CITY_COORDINATES = {
+    "Chicago": {"latitude": 41.8781, "longitude": -87.6298},
+    "New York": {"latitude": 40.7128, "longitude": -74.0060}
+}
+
 class GooglePlacesService(PlacesService):
     """
-    Google Places API implementation of the PlacesService.
+    Google Places API (New) implementation of the PlacesService.
+    Uses the v1 API (https://places.googleapis.com/v1/).
     """
     def __init__(self):
         self.api_key = os.getenv("GOOGLE_API_KEY")
-        self.base_url = "https://maps.googleapis.com/maps/api/place"
+        self.base_url = "https://places.googleapis.com/v1"
 
-    def autocomplete(self, query: str, city: str) -> Optional[List[Dict]]:
+    def autocomplete(self, query: str, city: str, session_token: Optional[str] = None) -> Optional[List[Dict]]:
         if not self.api_key:
-            print("Error: GOOGLE_API_KEY is not set. Please check your .env file.")
+            logging.error("GOOGLE_API_KEY is not set.")
             return None
 
-        # Google's autocomplete is more effective with session tokens for billing
-        # For this project, we'll make standalone requests for simplicity.
-        params = {
-            "input": f"{query} in {city}",
-            "types": "establishment",
-            "fields": "place_id,structured_formatting",
-            "key": self.api_key,
+        # Headers for the New API
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": self.api_key,
         }
-        
-        try:
-            response = requests.get(f"{self.base_url}/autocomplete/json", params=params)
-            response.raise_for_status()
-            predictions = response.json().get("predictions", [])
-            
-            return [
-                {
-                    "name": p["structured_formatting"]["main_text"],
-                    "place_id": p["place_id"],
-                    "address": p["structured_formatting"].get("secondary_text", ""),
+
+        # Request Body
+        body = {
+            "input": query,
+            "includedRegionCodes": ["us"],
+            # "includedPrimaryTypes": ["restaurant", "food"], # Optional: Filter strictly to food places
+        }
+
+        # Add session token if provided
+        if session_token:
+            body["sessionToken"] = session_token
+
+        # Add location bias if city is known
+        if city in CITY_COORDINATES:
+            body["locationBias"] = {
+                "circle": {
+                    "center": CITY_COORDINATES[city],
+                    "radius": 20000.0 # 20km
                 }
-                for p in predictions
-            ]
+            }
+
+        try:
+            logging.debug(f"Calling Google Places Autocomplete (New) with body: {body}")
+            response = requests.post(f"{self.base_url}/places:autocomplete", headers=headers, json=body)
+            
+            # Handle specific New API errors
+            if response.status_code != 200:
+                 logging.error(f"Google API Error ({response.status_code}): {response.text}")
+                 return None
+                 
+            data = response.json()
+            suggestions = data.get("suggestions", [])
+            logging.debug(f"Google Autocomplete found {len(suggestions)} results")
+            
+            results = []
+            for s in suggestions:
+                place_prediction = s.get("placePrediction", {})
+                
+                # The New API returns 'placeId' directly, or 'place' as resource name.
+                place_id = place_prediction.get("placeId")
+                if not place_id:
+                    resource_name = place_prediction.get("place", "")
+                    place_id = resource_name.replace("places/", "") if resource_name.startswith("places/") else resource_name
+                
+                text_obj = place_prediction.get("text", {})
+                main_text = text_obj.get("text", "")
+                
+                # structuredFormat contains mainText and secondaryText (address)
+                structured = place_prediction.get("structuredFormat", {})
+                main_text_struct = structured.get("mainText", {}).get("text", main_text)
+                secondary_text = structured.get("secondaryText", {}).get("text", "")
+
+                results.append({
+                    "name": main_text_struct,
+                    "place_id": place_id,
+                    "address": secondary_text,
+                })
+                
+            return results
+
         except requests.RequestException as e:
-            print(f"Error calling Google Places API: {e}")
+            logging.error(f"Error calling Google Places API: {e}")
             return None
 
-    def get_details(self, place_id: str) -> Optional[Dict]:
+    def get_details(self, place_id: str, session_token: Optional[str] = None) -> Optional[Dict]:
         if not self.api_key:
-            print("Error: GOOGLE_API_KEY is not set. Please check your .env file.")
+            logging.error("GOOGLE_API_KEY is not set.")
             return None
-            
-        params = {
-            "place_id": place_id,
-            "fields": "name,place_id,formatted_address,website,formatted_phone_number,type",
-            "key": self.api_key,
+        
+        # Ensure place_id is in the format "places/..." for the URL if strictly required,
+        # but v1 endpoint usually is /v1/places/{id}. 
+        # Documentation says resource name: "places/{PLACE_ID}".
+        resource_name = f"places/{place_id}" if not place_id.startswith("places/") else place_id
+        
+        headers = {
+            "X-Goog-Api-Key": self.api_key,
+            # Specify fields to return (FieldMask is required/recommended for billing control)
+            # Fields are camelCase in v1.
+            "X-Goog-FieldMask": "id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,types"
         }
+
+        params = {}
+        if session_token:
+            params["sessionToken"] = session_token
         
         try:
-            response = requests.get(f"{self.base_url}/details/json", params=params)
-            response.raise_for_status()
-            result = response.json().get("result", {})
+            response = requests.get(f"{self.base_url}/{resource_name}", headers=headers, params=params)
+            if response.status_code != 200:
+                logging.error(f"Google API Error ({response.status_code}): {response.text}")
+                return None
+                
+            place = response.json()
+
+            # Map v1 response back to our internal schema
+            # v1 returns types as snake_case values in a list, e.g. ["restaurant", "food"]
+            
+            # Extract ID without prefix
+            raw_id = place.get("id", "")
+            if not raw_id:
+                # Fallback to parsing resource name
+                raw_id = place.get("name", "").replace("places/", "")
+            if not raw_id: raw_id = place_id # Ultimate fallback
 
             return {
-                "name": result.get("name"),
-                "place_id": result.get("place_id"),
-                "address": result.get("formatted_address"),
-                "phone": result.get("formatted_phone_number"),
-                "website": result.get("website"),
-                "categories": result.get("types", []),
+                "name": place.get("displayName", {}).get("text"),
+                "place_id": raw_id,
+                "address": place.get("formattedAddress"),
+                "phone": place.get("nationalPhoneNumber"),
+                "website": place.get("websiteUri"),
+                "categories": place.get("types", []),
             }
         except requests.RequestException as e:
-            print(f"Error calling Google Places API: {e}")
+            logging.error(f"Error calling Google Places API: {e}")
             return None 

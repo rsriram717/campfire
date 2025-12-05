@@ -2,6 +2,7 @@
 
 import os
 import requests
+from typing import Optional
 from .places import PlacesService
 
 class YelpService(PlacesService):
@@ -12,7 +13,7 @@ class YelpService(PlacesService):
         self.api_key = os.getenv("YELP_API_KEY")
         self.base_url = "https://api.yelp.com/v3"
 
-    def autocomplete(self, query: str, city: str) -> list[dict]:
+    def autocomplete(self, query: str, city: str, session_token: Optional[str] = None) -> list[dict]:
         if not self.api_key:
             return []
 
@@ -41,7 +42,7 @@ class YelpService(PlacesService):
             print(f"Error calling Yelp API: {e}")
             return []
 
-    def get_details(self, place_id: str) -> dict:
+    def get_details(self, place_id: str, session_token: Optional[str] = None) -> dict:
         if not self.api_key:
             return {}
             

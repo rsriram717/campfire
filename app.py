@@ -449,10 +449,12 @@ def update_user():
 def autocomplete():
     query = request.args.get('query', '')
     city = request.args.get('city', '')
+    session_token = request.args.get('session_token')
+    
     if not query or not city:
         return jsonify([])
     
-    results = places_service.autocomplete(query, city)
+    results = places_service.autocomplete(query, city, session_token=session_token)
     if results is None:
         return jsonify({"error": "API call failed. Check server logs and API key configuration."}), 500
     

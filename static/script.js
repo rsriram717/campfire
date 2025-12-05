@@ -55,6 +55,32 @@ function initTabs() {
     });
 }
 
+// --- Utils ---
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func.apply(this, args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+function generateSessionToken() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+// Global session token
+let currentSessionToken = generateSessionToken();
+
 // --- Autocomplete & Inputs ---
 function initializeAutocomplete(inputElement) {
     const awesomplete = new Awesomplete(inputElement, {
@@ -63,12 +89,12 @@ function initializeAutocomplete(inputElement) {
         maxItems: 5
     });
 
-    inputElement.addEventListener('keyup', function() {
+    const debouncedFetch = debounce(function() {
         const query = inputElement.value;
         const city = document.getElementById('city').value;
         if (query.length < 2) return;
 
-        fetch(`/autocomplete?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}`)
+        fetch(`/autocomplete?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}&session_token=${encodeURIComponent(currentSessionToken)}`)
             .then(res => res.json())
             .then(data => {
                 awesomplete.list = data.map(r => ({ 
@@ -77,7 +103,9 @@ function initializeAutocomplete(inputElement) {
                 }));
             })
             .catch(console.error);
-    });
+    }, 300);
+
+    inputElement.addEventListener('keyup', debouncedFetch);
 
     inputElement.addEventListener('awesomplete-selectcomplete', function(event) {
         const { label, value } = event.text;
@@ -86,6 +114,9 @@ function initializeAutocomplete(inputElement) {
         // Update hidden place_id input in same wrapper
         const wrapper = this.closest('.input-field-wrapper');
         wrapper.querySelector('input[name="place_id"]').value = value;
+        
+        // Regenerate token after selection (start new session)
+        currentSessionToken = generateSessionToken();
     });
 }
 

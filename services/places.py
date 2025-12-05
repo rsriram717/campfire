@@ -1,6 +1,7 @@
 # services/places.py
 
 from abc import ABC, abstractmethod
+from typing import Optional
 
 class PlacesService(ABC):
     """
@@ -9,7 +10,7 @@ class PlacesService(ABC):
     """
 
     @abstractmethod
-    def autocomplete(self, query: str, city: str) -> list[dict]:
+    def autocomplete(self, query: str, city: str, session_token: Optional[str] = None) -> list[dict]:
         """
         Given a query string and a city, return a list of autocomplete suggestions.
         
@@ -21,7 +22,7 @@ class PlacesService(ABC):
         pass
 
     @abstractmethod
-    def get_details(self, place_id: str) -> dict:
+    def get_details(self, place_id: str, session_token: Optional[str] = None) -> dict:
         """
         Given a place_id, return detailed information about the place.
         
