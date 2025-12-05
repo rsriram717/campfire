@@ -90,7 +90,11 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city, neigh
 
                 if len(parts) >= 3:
                     name = parts[0].strip()
-                    reason = parts[1].strip()
+                    raw_reason = parts[1].strip()
+                    # Check if reason is valid (not empty, not just hyphens)
+                    if raw_reason and raw_reason != "-" and len(raw_reason) > 5:
+                        reason = raw_reason
+                    
                     # Join the rest as description in case there are more hyphens
                     description = " - ".join(parts[2:]).strip()
                 elif len(parts) == 2:
