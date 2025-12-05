@@ -230,13 +230,19 @@ def get_recommendations():
 
                 # Create new restaurant with debug logging
                 logging.info(f"Creating new restaurant with details: {details}")
+                
+                slug = generate_slug(details.get('name', ''), city)
+                # Handle potential slug collision
+                if Restaurant.query.filter_by(slug=slug).first():
+                    slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+
                 restaurant = Restaurant(
                     name=details.get('name'),
                     location=details.get('address', ''),
                     cuisine_type=", ".join(details.get('categories', [])),  # Join list into string
                     provider=provider,
                     place_id=place_id,
-                    slug=generate_slug(details.get('name', ''), city)
+                    slug=slug
                 )
                 logging.info(f"Restaurant object created: {restaurant.__dict__}")
                 
