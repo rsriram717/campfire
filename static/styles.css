@@ -356,7 +356,17 @@ body {
 .restaurant-name {
     font-size: 1.4rem;
     color: var(--text-primary);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.restaurant-address {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    opacity: 0.8;
 }
 
 .recommendation-reason {
@@ -413,22 +423,61 @@ body {
 }
 
 /* --- Awesomplete Customization --- */
+.awesomplete {
+    width: 100%; /* Ensure container takes full width */
+}
+
 .awesomplete > ul {
     background-color: var(--bg-input);
     color: var(--text-dark);
     border-radius: 0 0 8px 8px;
-    border: none;
+    border: 1px solid var(--border-color);
+    border-top: none;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    padding: 0; /* Remove default list padding */
+    margin-top: 0;
+    overflow: hidden; /* Contain rounded corners */
+    z-index: 1000;
 }
 
+.awesomplete > ul > li {
+    padding: 0.8rem 1rem; /* More breathing room */
+    cursor: pointer;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    transition: background-color 0.2s;
+}
+
+.awesomplete > ul > li:last-child {
+    border-bottom: none;
+}
+
+/* Hover state */
 .awesomplete > ul > li:hover {
+    background-color: rgba(224, 123, 76, 0.1); /* Subtle orange tint */
+    color: var(--text-dark);
+}
+
+/* Selected state (Keyboard navigation) */
+.awesomplete > ul > li[aria-selected="true"] {
     background-color: var(--accent-orange);
     color: white;
 }
 
+/* Highlighted match text */
 .awesomplete mark {
-    background: rgba(224, 123, 76, 0.3);
+    background: transparent;
     color: inherit;
+    font-weight: bold;
+    text-decoration: underline;
+    text-decoration-color: var(--accent-orange);
+    padding: 0;
+}
+
+/* When item is selected, mark needs to be white */
+.awesomplete > ul > li[aria-selected="true"] mark {
+    text-decoration-color: white;
 }
 
 /* --- Loading Indicator --- */

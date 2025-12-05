@@ -86,7 +86,11 @@ function initializeAutocomplete(inputElement) {
     const awesomplete = new Awesomplete(inputElement, {
         minChars: 2,
         autoFirst: true,
-        maxItems: 5
+        maxItems: 5,
+        // Trust the API results (Google is smarter than simple string matching)
+        filter: function() { return true; },
+        // Preserve Google's ranking order
+        sort: false
     });
 
     const debouncedFetch = debounce(function() {
@@ -163,6 +167,7 @@ function renderRecommendations(recommendations) {
     container.innerHTML = recommendations.map(rec => `
         <div class="recommendation-card">
             <h3 class="restaurant-name">${rec.name}</h3>
+            ${rec.address ? `<p class="restaurant-address"><i class="bi bi-geo-alt"></i> ${rec.address}</p>` : ''}
             <p class="recommendation-reason">
                 <span class="reason-label">Why it's recommended:</span> ${rec.description}
             </p>
