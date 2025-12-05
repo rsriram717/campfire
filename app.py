@@ -277,31 +277,95 @@ def get_recommendations():
         output_restaurants = []
         for rec in recommendations:
             sanitized_name = sanitize_name(rec['name'])
-            slug = generate_slug(sanitized_name, city)
-            existing_restaurant = Restaurant.query.filter(Restaurant.slug == slug).first()
             
-            if not existing_restaurant:
-                new_rec_restaurant = Restaurant(
-                    name=sanitized_name,
-                    location=city, # We don't have more precise location from the AI
-                    cuisine_type="", # We don't get this from the AI
-                    provider='campfire_ai', # Use a custom provider for AI-generated restaurants
-                    place_id=slug,         # Use the slug as a placeholder place_id
-                    slug=slug
-                )
-                db.session.add(new_rec_restaurant)
-                db.session.flush()
-                restaurant_id = new_rec_restaurant.id
-            else:
-                restaurant_id = existing_restaurant.id
+            # RESOLUTION LOGIC START
+            resolved_restaurant = None
+            
+            # 1. Search for the place using Google Autocomplete
+            # Generate a session token for this specific resolution attempt (Search + Details)
+            resolution_session_token = str(uuid.uuid4())
+            
+            logging.debug(f"Attempting to resolve AI recommendation: {sanitized_name}")
+            search_results = places_service.autocomplete(sanitized_name, city, session_token=resolution_session_token)
+            
+            if search_results and len(search_results) > 0:
+                top_match = search_results[0]
+                resolved_place_id = top_match['place_id']
+                logging.debug(f"Resolved '{sanitized_name}' to Google Place ID: {resolved_place_id}")
                 
-            req_rec = RequestRestaurant(
-                user_request_id=user_request.id,
-                restaurant_id=restaurant_id,
-                type=RequestType.recommendation
-            )
-            db.session.add(req_rec)
-            output_restaurants.append(rec)
+                # 2. Check if we already have this canonical place
+                existing_restaurant = Restaurant.query.filter_by(place_id=resolved_place_id).first()
+                
+                if existing_restaurant:
+                    logging.debug(f"Found existing restaurant in DB: {existing_restaurant.name}")
+                    resolved_restaurant = existing_restaurant
+                else:
+                    # 3. Fetch details and create new canonical restaurant
+                    logging.debug(f"Fetching details for new place: {resolved_place_id}")
+                    details = places_service.get_details(resolved_place_id, session_token=resolution_session_token)
+                    
+                    if details:
+                        # Use the official name from Google
+                        official_name = details.get('name', sanitized_name)
+                        slug = generate_slug(official_name, city)
+                        
+                        # Handle potential slug collision (rare but possible if names are identical)
+                        if Restaurant.query.filter_by(slug=slug).first():
+                            slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+
+                        new_restaurant = Restaurant(
+                            name=official_name,
+                            location=details.get('address', city),
+                            cuisine_type=", ".join(details.get('categories', [])),
+                            provider='google', # Official provider
+                            place_id=resolved_place_id,
+                            slug=slug
+                        )
+                        db.session.add(new_restaurant)
+                        db.session.flush()
+                        resolved_restaurant = new_restaurant
+                        logging.info(f"Created new canonical restaurant: {official_name} ({resolved_place_id})")
+                    else:
+                        logging.warning(f"Failed to get details for {resolved_place_id}")
+            
+            # Fallback: If resolution failed, use the old 'campfire_ai' method
+            if not resolved_restaurant:
+                logging.warning(f"Could not resolve '{sanitized_name}'. Falling back to 'campfire_ai'.")
+                slug = generate_slug(sanitized_name, city)
+                existing_restaurant = Restaurant.query.filter(Restaurant.slug == slug).first()
+                
+                if existing_restaurant:
+                     resolved_restaurant = existing_restaurant
+                else:
+                    new_rec_restaurant = Restaurant(
+                        name=sanitized_name,
+                        location=city, 
+                        cuisine_type="",
+                        provider='campfire_ai',
+                        place_id=slug, # Use slug as placeholder
+                        slug=slug
+                    )
+                    db.session.add(new_rec_restaurant)
+                    db.session.flush()
+                    resolved_restaurant = new_rec_restaurant
+
+            # Create the RequestRestaurant link
+            if resolved_restaurant:
+                req_rec = RequestRestaurant(
+                    user_request_id=user_request.id,
+                    restaurant_id=resolved_restaurant.id,
+                    type=RequestType.recommendation
+                )
+                db.session.add(req_rec)
+                
+                # Update the output with the canonical name/description
+                # We preserve the AI description as it explains *why* it was recommended
+                output_restaurants.append({
+                    "name": resolved_restaurant.name,
+                    "description": rec['description'],
+                    "address": resolved_restaurant.location # Useful for frontend
+                })
+            # RESOLUTION LOGIC END
 
         db.session.commit()
         return jsonify({"recommendations": output_restaurants})

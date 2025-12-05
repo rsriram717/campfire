@@ -77,7 +77,10 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city, neigh
         recommendations = []
         for restaurant in restaurants:
             if restaurant.strip():
-                parts = restaurant.split(' - ', 1)
+                # Strip leading numbers (e.g. "1. Au Cheval", "2. Girl & The Goat")
+                cleaned_line = re.sub(r'^\d+[\.\)]\s*', '', restaurant.strip())
+                
+                parts = cleaned_line.split(' - ', 1)
                 if len(parts) == 2:
                     name, description = parts
                     sanitized_name = sanitize_name(name)
