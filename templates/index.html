@@ -26,7 +26,6 @@
             <nav class="main-nav">
                 <button class="nav-tab active" data-tab="recommendations">Get Recommendations</button>
                 <button class="nav-tab" data-tab="preferences">Restaurant Preferences</button>
-                <button class="nav-tab" data-tab="history">Request History</button>
             </nav>
             <div class="user-profile">
                 <i class="bi bi-person-circle user-icon"></i>
@@ -106,30 +105,10 @@
                                         <!-- Populated via JS -->
                                     </select>
                                 </div>
-                                <div class="pill-dropdown">
-                                    <select id="restaurant-type-dropdown" class="pill-select">
-                                        <option value="">Restaurant Type</option>
-                                        <!-- Populated via JS or kept simple -->
-                                    </select>
-                                </div>
                             </div>
 
-                            <div class="toggle-row">
-                                <label class="toggle-option">
-                                    <input type="checkbox" value="casual" class="toggle-input">
-                                    <span class="toggle-dot"></span>
-                                    <span class="toggle-label">Casual</span>
-                                </label>
-                                <label class="toggle-option">
-                                    <input type="checkbox" value="sit-down" class="toggle-input">
-                                    <span class="toggle-dot"></span>
-                                    <span class="toggle-label">Sit-Down</span>
-                                </label>
-                                <label class="toggle-option">
-                                    <input type="checkbox" value="bar" class="toggle-input">
-                                    <span class="toggle-dot"></span>
-                                    <span class="toggle-label">Bar</span>
-                                </label>
+                            <div class="toggle-row" id="type-toggles">
+                                <!-- Populated via JS from RESTAURANT_TYPES -->
                             </div>
                         </div>
 
@@ -175,21 +154,6 @@
                         <!-- Preferences populated via JS -->
                         <div class="empty-state">
                             <p>Loading your preferences...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Tab: Request History -->
-            <div class="tab-panel" id="history-panel">
-                <div class="history-container">
-                    <div class="panel-header">
-                        <h2>Your Dining History</h2>
-                        <p>Past recommendations and requests</p>
-                    </div>
-                    <div id="history-list" class="history-grid">
-                        <div class="empty-state">
-                            <p>History feature coming soon...</p>
                         </div>
                     </div>
                 </div>

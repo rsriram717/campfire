@@ -124,16 +124,23 @@ function initializeAutocomplete(inputElement) {
     });
 }
 
-// --- Dynamic Dropdowns ---
+// --- Dynamic Dropdowns & Toggles ---
 function initDropdowns() {
     const citySelect = document.getElementById('city');
     const neighborhoodSelect = document.getElementById('neighborhood');
-    const typeSelect = document.getElementById('restaurant-type-dropdown');
+    const typeContainer = document.getElementById('type-toggles');
 
-    // Populate Restaurant Types
-    typeSelect.innerHTML = '<option value="">Restaurant Type</option>';
+    // Populate Restaurant Types Toggles
+    typeContainer.innerHTML = '';
     RESTAURANT_TYPES.forEach(type => {
-        typeSelect.innerHTML += `<option value="${type.toLowerCase()}">${type}</option>`;
+        const value = type.toLowerCase();
+        typeContainer.innerHTML += `
+            <label class="toggle-option">
+                <input type="checkbox" value="${value}" class="toggle-input">
+                <span class="toggle-dot"></span>
+                <span class="toggle-label">${type}</span>
+            </label>
+        `;
     });
 
     // Handle City Change
@@ -262,10 +269,6 @@ function initForm() {
         const neighborhood = document.getElementById('neighborhood').value;
         const types = [];
         
-        // Dropdown type
-        const dropType = document.getElementById('restaurant-type-dropdown').value;
-        if (dropType) types.push(dropType);
-
         // Toggle types
         document.querySelectorAll('.toggle-input:checked').forEach(cb => {
             types.push(cb.value);
