@@ -369,6 +369,21 @@ body {
     opacity: 0.8;
 }
 
+.recommendation-context {
+    background-color: rgba(224, 123, 76, 0.15);
+    color: var(--accent-orange);
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 0.8rem;
+    display: inline-block;
+}
+
+.recommendation-context i {
+    margin-right: 0.4rem;
+}
+
 .recommendation-reason {
     color: var(--text-secondary);
     font-size: 0.95rem;

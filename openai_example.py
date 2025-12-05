@@ -80,11 +80,33 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city, neigh
                 # Strip leading numbers (e.g. "1. Au Cheval", "2. Girl & The Goat")
                 cleaned_line = re.sub(r'^\d+[\.\)]\s*', '', restaurant.strip())
                 
-                parts = cleaned_line.split(' - ', 1)
-                if len(parts) == 2:
-                    name, description = parts
+                # Split by ' - '
+                # Expected format: Name - Because you liked X - Description
+                parts = cleaned_line.split(' - ')
+                
+                name = ""
+                description = ""
+                reason = ""
+
+                if len(parts) >= 3:
+                    name = parts[0].strip()
+                    reason = parts[1].strip()
+                    # Join the rest as description in case there are more hyphens
+                    description = " - ".join(parts[2:]).strip()
+                elif len(parts) == 2:
+                    # Fallback to old format
+                    name = parts[0].strip()
+                    description = parts[1].strip()
+                else:
+                    # Fallback for weird formatting, treat whole line as name (risky but better than nothing)
+                    name = cleaned_line
+                    
+                if name:
                     sanitized_name = sanitize_name(name)
-                    recommendations.append({"name": sanitized_name, "description": description.strip()})
+                    rec_obj = {"name": sanitized_name, "description": description}
+                    if reason:
+                        rec_obj["reason"] = reason
+                    recommendations.append(rec_obj)
                 else:
                     logging.warning(f"Unexpected format: {restaurant}")
 

@@ -168,8 +168,9 @@ function renderRecommendations(recommendations) {
         <div class="recommendation-card">
             <h3 class="restaurant-name">${rec.name}</h3>
             ${rec.address ? `<p class="restaurant-address"><i class="bi bi-geo-alt"></i> ${rec.address}</p>` : ''}
+            ${rec.reason ? `<p class="recommendation-context"><i class="bi bi-lightbulb-fill"></i> ${rec.reason}</p>` : ''}
             <p class="recommendation-reason">
-                <span class="reason-label">Why it's recommended:</span> ${rec.description}
+                <span class="reason-label">Why:</span> ${rec.description}
             </p>
             <div class="card-actions">
                 <button type="button" class="action-btn like-btn" data-id="${rec.id}" title="Like">

@@ -9,7 +9,9 @@ Liked Restaurants:
 {neighborhood_section}
 {type_section}
 Please provide a list of {num_recommendations} unique restaurants that are not in the user's liked or disliked lists.
-For each recommendation, provide a brief (10-15 word) description of why it's a good match.
-Format the output as a plain list, with each restaurant on a new line, like this:
-Restaurant Name - Description
-Another Restaurant - Description 
+For each recommendation, identify which of the user's liked restaurants or preferences inspired this suggestion (e.g. "Because you liked The Purple Pig" or "Because you like small plates").
+Then provide a brief (10-15 word) description of why it's a good match.
+
+Format the output as a plain list, with each restaurant on a new line, using exactly this format:
+Restaurant Name - Because you liked [Source/Theme] - Description
+Another Restaurant - Because you liked [Source/Theme] - Description 

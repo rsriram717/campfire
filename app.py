@@ -370,6 +370,7 @@ def get_recommendations():
                     "id": resolved_restaurant.id,
                     "name": resolved_restaurant.name,
                     "description": rec['description'],
+                    "reason": rec.get('reason'), # Pass the "Because you liked..." context
                     "address": resolved_restaurant.location # Useful for frontend
                 })
             # RESOLUTION LOGIC END
