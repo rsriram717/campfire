@@ -172,10 +172,10 @@ function renderRecommendations(recommendations) {
                 <span class="reason-label">Why it's recommended:</span> ${rec.description}
             </p>
             <div class="card-actions">
-                <button class="action-btn like-btn" data-restaurant="${rec.name}" title="Like">
+                <button type="button" class="action-btn like-btn" data-id="${rec.id}" title="Like">
                     <i class="bi bi-hand-thumbs-up"></i>
                 </button>
-                <button class="action-btn dislike-btn" data-restaurant="${rec.name}" title="Dislike">
+                <button type="button" class="action-btn dislike-btn" data-id="${rec.id}" title="Dislike">
                     <i class="bi bi-hand-thumbs-down"></i>
                 </button>
             </div>
@@ -188,19 +188,47 @@ function renderRecommendations(recommendations) {
 
 function attachCardListeners() {
     document.querySelectorAll('.recommendation-card .action-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault(); // Prevent any form submission
+            
             // toggle active state visually
             const isLike = this.classList.contains('like-btn');
             const parent = this.closest('.card-actions');
+            const restaurantId = this.dataset.id;
+            const preference = isLike ? 'like' : 'dislike';
+            
+            // If already active, maybe toggle off? For now just standard toggle behavior
+            // If clicking same button, do nothing? Or untoggle? 
+            // Let's assume untoggling isn't primary flow yet, just standard selection.
             
             parent.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
 
-            // Note: Actual persistence requires restaurant ID, which we might not have 
-            // for AI-generated results immediately unless we match them to DB.
-            // For now, just visual feedback.
+            // Persist immediately
+            const userName = document.getElementById('name').value;
+            if (userName && restaurantId) {
+                saveSinglePreference(userName, parseInt(restaurantId), preference);
+            }
         });
     });
+}
+
+function saveSinglePreference(userName, restaurantId, preference) {
+    fetch('/save_preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            user_name: userName,
+            preferences: [{ restaurant_id: restaurantId, preference: preference }]
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            console.log(`Saved preference: ${preference} for ID ${restaurantId}`);
+        }
+    })
+    .catch(console.error);
 }
 
 // --- Form Submission ---

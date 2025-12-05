@@ -367,6 +367,7 @@ def get_recommendations():
                 # Update the output with the canonical name/description
                 # We preserve the AI description as it explains *why* it was recommended
                 output_restaurants.append({
+                    "id": resolved_restaurant.id,
                     "name": resolved_restaurant.name,
                     "description": rec['description'],
                     "address": resolved_restaurant.location # Useful for frontend
