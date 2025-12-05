@@ -305,6 +305,300 @@ function initForm() {
     });
 }
 
+// --- Feedback Logic ---
+function initFeedback() {
+    const submitBtn = document.getElementById('submit-feedback-btn');
+    const contentInput = document.getElementById('feedback-content');
+    const listContainer = document.getElementById('feedback-list');
+
+    // Expose load function
+    window.loadFeedback = function() {
+        const name = UsernameHandler.sanitize(document.getElementById('name').value);
+        
+        // Even if no name, we can show feedback, but voting/submitting requires name
+        let url = '/get_feedback';
+        if (name) url += `?user_name=${encodeURIComponent(name)}`;
+
+        listContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="spinner"></div>
+                <p>Loading community ideas...</p>
+            </div>`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    listContainer.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+                    return;
+                }
+                renderFeedbackList(data.suggestions);
+            })
+            .catch(err => {
+                console.error(err);
+                listContainer.innerHTML = `<div class="empty-state"><p>Error loading suggestions.</p></div>`;
+            });
+    };
+
+    function renderFeedbackList(suggestions) {
+        if (!suggestions || suggestions.length === 0) {
+            listContainer.innerHTML = `
+                <div class="empty-state">
+                    <p>No suggestions yet. Be the first!</p>
+                </div>`;
+            return;
+        }
+
+        listContainer.innerHTML = suggestions.map(s => `
+            <div class="recommendation-card feedback-card">
+                <div class="vote-controls">
+                    <button class="vote-btn upvote ${s.user_vote === 1 ? 'active' : ''}" data-id="${s.id}" data-type="1">
+                        <i class="bi bi-caret-up-fill"></i>
+                    </button>
+                    <span class="vote-score">${s.score}</span>
+                    <button class="vote-btn downvote ${s.user_vote === -1 ? 'active' : ''}" data-id="${s.id}" data-type="-1">
+                        <i class="bi bi-caret-down-fill"></i>
+                    </button>
+                </div>
+                <div class="feedback-content">
+                    <p>${s.content}</p>
+                </div>
+            </div>
+        `).join('');
+
+        // Attach vote listeners
+        document.querySelectorAll('.vote-btn').forEach(btn => {
+            btn.addEventListener('click', handleVote);
+        });
+    }
+
+    function handleVote() {
+        const name = UsernameHandler.sanitize(document.getElementById('name').value);
+        if (!name) {
+            alert('Please enter your name in the main form to vote.');
+            return;
+        }
+
+        const btn = this;
+        const id = btn.dataset.id;
+        const type = parseInt(btn.dataset.type);
+        
+        // Optimistic UI update could go here, but we'll wait for server for accuracy
+        // Actually, let's do optimistic to feel fast
+        const parent = btn.parentElement;
+        const scoreSpan = parent.querySelector('.vote-score');
+        let currentScore = parseInt(scoreSpan.textContent);
+        
+        // Logic matches backend: Toggle or Switch
+        // But simpler to just reload or wait for response. Let's wait for response.
+        
+        fetch('/vote_feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_name: name,
+                suggestion_id: id,
+                vote_type: type
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Update score
+                scoreSpan.textContent = data.new_score;
+                
+                // Update active classes
+                const upBtn = parent.querySelector('.upvote');
+                const downBtn = parent.querySelector('.downvote');
+                
+                // Reset both
+                upBtn.classList.remove('active');
+                downBtn.classList.remove('active');
+                
+                // Determine new state based on what we clicked and what backend likely did
+                // Actually, checking 'active' state before click is hard if we don't track it.
+                // Let's just reload the list to be 100% sure of state, 
+                // OR return the new vote status from backend.
+                // Backend returns {success, new_score}. It doesn't return new_vote_status.
+                // Let's reload the list quietly? No that flickers.
+                
+                // Better: Logic on client.
+                // If I clicked Up and it WASN'T active -> Now Active.
+                // If I clicked Up and it WAS active -> Now Inactive.
+                // But wait, what if I clicked Up and Down was active?
+                // I'll just reload the list for correctness. It's fast enough locally.
+                window.loadFeedback(); 
+            } else {
+                alert(data.error);
+            }
+        });
+    }
+
+    submitBtn.addEventListener('click', () => {
+        const name = UsernameHandler.sanitize(document.getElementById('name').value);
+        const content = contentInput.value.trim();
+
+        if (!name) {
+            alert('Please enter your name in the main form first.');
+            return;
+        }
+        if (!content) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        fetch('/submit_feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_name: name, content: content })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                contentInput.value = '';
+                window.loadFeedback();
+            } else {
+                alert(data.error);
+            }
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Idea';
+        });
+    });
+}
+
+// --- Feedback Logic ---
+function initFeedback() {
+    const submitBtn = document.getElementById('submit-feedback-btn');
+    const contentInput = document.getElementById('feedback-content');
+    const listContainer = document.getElementById('feedback-list');
+
+    // Expose load function
+    window.loadFeedback = function() {
+        const name = UsernameHandler.sanitize(document.getElementById('name').value);
+        
+        // Even if no name, we can show feedback, but voting/submitting requires name
+        let url = '/get_feedback';
+        if (name) url += `?user_name=${encodeURIComponent(name)}`;
+
+        listContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="spinner"></div>
+                <p>Loading community ideas...</p>
+            </div>`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    listContainer.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+                    return;
+                }
+                renderFeedbackList(data.suggestions);
+            })
+            .catch(err => {
+                console.error(err);
+                listContainer.innerHTML = `<div class="empty-state"><p>Error loading suggestions.</p></div>`;
+            });
+    };
+
+    function renderFeedbackList(suggestions) {
+        if (!suggestions || suggestions.length === 0) {
+            listContainer.innerHTML = `
+                <div class="empty-state">
+                    <p>No suggestions yet. Be the first!</p>
+                </div>`;
+            return;
+        }
+
+        listContainer.innerHTML = suggestions.map(s => `
+            <div class="recommendation-card feedback-card">
+                <div class="vote-controls">
+                    <button type="button" class="vote-btn upvote ${s.user_vote === 1 ? 'active' : ''}" data-id="${s.id}" data-type="1">
+                        <i class="bi bi-caret-up-fill"></i>
+                    </button>
+                    <span class="vote-score">${s.score}</span>
+                    <button type="button" class="vote-btn downvote ${s.user_vote === -1 ? 'active' : ''}" data-id="${s.id}" data-type="-1">
+                        <i class="bi bi-caret-down-fill"></i>
+                    </button>
+                </div>
+                <div class="feedback-content">
+                    <p>${s.content}</p>
+                </div>
+            </div>
+        `).join('');
+
+        // Attach vote listeners
+        document.querySelectorAll('.vote-btn').forEach(btn => {
+            btn.addEventListener('click', handleVote);
+        });
+    }
+
+    function handleVote() {
+        const name = UsernameHandler.sanitize(document.getElementById('name').value);
+        if (!name) {
+            alert('Please enter your name in the main form to vote.');
+            return;
+        }
+
+        const btn = this;
+        const id = btn.dataset.id;
+        const type = parseInt(btn.dataset.type);
+        
+        fetch('/vote_feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_name: name,
+                suggestion_id: id,
+                vote_type: type
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                window.loadFeedback(); 
+            } else {
+                alert(data.error);
+            }
+        });
+    }
+
+    submitBtn.addEventListener('click', () => {
+        const name = UsernameHandler.sanitize(document.getElementById('name').value);
+        const content = contentInput.value.trim();
+
+        if (!name) {
+            alert('Please enter your name in the main form first.');
+            return;
+        }
+        if (!content) return;
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+
+        fetch('/submit_feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_name: name, content: content })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                contentInput.value = '';
+                window.loadFeedback();
+            } else {
+                alert(data.error);
+            }
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Idea';
+        });
+    });
+}
+
 // --- Preferences Logic ---
 function initPreferences() {
     const listContainer = document.getElementById('restaurant-list');
@@ -392,10 +686,14 @@ document.addEventListener('DOMContentLoaded', () => {
     initDropdowns();
     initForm();
     initPreferences();
+    initFeedback();
 
     // Hook into tab switching
     document.querySelector('.nav-tab[data-tab="preferences"]').addEventListener('click', () => {
         if (window.loadPreferences) window.loadPreferences();
+    });
+    document.querySelector('.nav-tab[data-tab="feedback"]').addEventListener('click', () => {
+        if (window.loadFeedback) window.loadFeedback();
     });
 
     // Init autocomplete for all inputs

@@ -26,6 +26,7 @@
             <nav class="main-nav">
                 <button class="nav-tab active" data-tab="recommendations">Get Recommendations</button>
                 <button class="nav-tab" data-tab="preferences">Restaurant Preferences</button>
+                <button class="nav-tab" data-tab="feedback">Community Feedback</button>
             </nav>
             <div class="user-profile">
                 <i class="bi bi-person-circle user-icon"></i>
@@ -154,6 +155,34 @@
                         <!-- Preferences populated via JS -->
                         <div class="empty-state">
                             <p>Loading your preferences...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Community Feedback -->
+            <div class="tab-panel" id="feedback-panel">
+                <div class="two-column-layout">
+                    <!-- Left: Submit -->
+                    <div class="left-panel">
+                        <div class="panel-header" style="text-align: left; margin-bottom: 1.5rem;">
+                            <h2>Submit Feedback</h2>
+                            <p>Share your ideas to improve Campfire.</p>
+                        </div>
+                        <div class="form-section">
+                            <textarea id="feedback-content" class="input-field" rows="5" placeholder="I wish Campfire could..." style="resize: vertical; min-height: 120px;"></textarea>
+                        </div>
+                        <button id="submit-feedback-btn" class="cta-button" style="margin-top: 1rem;">Submit Idea</button>
+                    </div>
+
+                    <!-- Right: List -->
+                    <div class="right-panel">
+                        <h2 class="panel-title">Top Suggestions</h2>
+                        <div id="feedback-list" class="recommendations-cards">
+                            <!-- Populated via JS -->
+                            <div class="empty-state">
+                                <p>Loading suggestions...</p>
+                            </div>
                         </div>
                     </div>
                 </div>

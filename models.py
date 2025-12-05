@@ -74,3 +74,25 @@ class RequestRestaurant(db.Model):
     user_request_id = db.Column(db.Integer, db.ForeignKey('user_request.id'), nullable=False)
     restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'), nullable=False)
     type = db.Column(db.Enum(RequestType), nullable=False)
+
+class FeedbackSuggestion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    score = db.Column(db.Integer, default=0)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    author = db.relationship('User', backref='suggestions')
+    votes = db.relationship('FeedbackVote', backref='suggestion', lazy=True, cascade="all, delete-orphan")
+
+class FeedbackVote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    suggestion_id = db.Column(db.Integer, db.ForeignKey('feedback_suggestion.id'), nullable=False)
+    vote_type = db.Column(db.Integer, nullable=False) # 1 for upvote, -1 for downvote
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "suggestion_id", name="uq_feedback_user_suggestion"),
+    )

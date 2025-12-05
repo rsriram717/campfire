@@ -20,7 +20,7 @@ from services import places_service
 from utils import generate_slug
 
 from openai_example import get_similar_restaurants, sanitize_name
-from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType, UserRestaurantPreference, PreferenceType
+from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType, UserRestaurantPreference, PreferenceType, FeedbackSuggestion, FeedbackVote
 
 # Initialize Flask app, explicitly setting a writable instance path for Vercel
 app = Flask(__name__, instance_path='/tmp/instance')
@@ -549,6 +549,130 @@ def autocomplete():
         return jsonify({"error": "API call failed. Check server logs and API key configuration."}), 500
     
     return jsonify(results)
+
+# --- Feedback Routes ---
+
+@app.route('/submit_feedback', methods=['POST'])
+def submit_feedback():
+    try:
+        data = request.json
+        user_name = data.get('user_name')
+        content = data.get('content')
+        
+        if not user_name or not content:
+            return jsonify({"error": "Missing user name or content"}), 400
+            
+        user = User.query.filter_by(name=user_name).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+            
+        suggestion = FeedbackSuggestion(
+            user_id=user.id,
+            content=content,
+            score=0
+        )
+        db.session.add(suggestion)
+        db.session.commit()
+        
+        return jsonify({"success": True, "id": suggestion.id})
+        
+    except Exception as e:
+        logging.error(f"Error submitting feedback: {e}")
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_feedback', methods=['GET'])
+def get_feedback():
+    try:
+        user_name = request.args.get('user_name')
+        user_id = None
+        if user_name:
+            user = User.query.filter_by(name=user_name).first()
+            if user:
+                user_id = user.id
+        
+        # Get all suggestions sorted by score desc
+        suggestions = FeedbackSuggestion.query.order_by(FeedbackSuggestion.score.desc()).limit(50).all()
+        
+        # Get user's votes if user exists
+        user_votes = {} # suggestion_id -> vote_type
+        if user_id:
+            votes = FeedbackVote.query.filter_by(user_id=user_id).all()
+            for v in votes:
+                user_votes[v.suggestion_id] = v.vote_type
+        
+        result = []
+        for s in suggestions:
+            result.append({
+                "id": s.id,
+                "content": s.content,
+                "score": s.score,
+                "user_vote": user_votes.get(s.id, 0) # 0 if no vote, 1 if up, -1 if down
+            })
+            
+        return jsonify({"suggestions": result})
+        
+    except Exception as e:
+        logging.error(f"Error getting feedback: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/vote_feedback', methods=['POST'])
+def vote_feedback():
+    try:
+        data = request.json
+        user_name = data.get('user_name')
+        suggestion_id = data.get('suggestion_id')
+        vote_type = data.get('vote_type') # 1 or -1
+        
+        if not all([user_name, suggestion_id, vote_type]):
+            return jsonify({"error": "Missing data"}), 400
+            
+        user = User.query.filter_by(name=user_name).first()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+            
+        suggestion = FeedbackSuggestion.query.get(suggestion_id)
+        if not suggestion:
+            return jsonify({"error": "Suggestion not found"}), 404
+            
+        # Check existing vote
+        existing_vote = FeedbackVote.query.filter_by(
+            user_id=user.id, 
+            suggestion_id=suggestion.id
+        ).first()
+        
+        new_score_delta = 0
+        
+        if existing_vote:
+            if existing_vote.vote_type == vote_type:
+                # Toggle off (remove vote)
+                db.session.delete(existing_vote)
+                new_score_delta = -vote_type
+            else:
+                # Switch vote (e.g. 1 to -1)
+                # Score change: -1 - 1 = -2
+                new_score_delta = vote_type - existing_vote.vote_type
+                existing_vote.vote_type = vote_type
+        else:
+            # New vote
+            new_vote = FeedbackVote(
+                user_id=user.id,
+                suggestion_id=suggestion.id,
+                vote_type=vote_type
+            )
+            db.session.add(new_vote)
+            new_score_delta = vote_type
+            
+        # Update cached score
+        suggestion.score += new_score_delta
+        db.session.commit()
+        
+        return jsonify({"success": True, "new_score": suggestion.score})
+        
+    except Exception as e:
+        logging.error(f"Error voting: {e}")
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 # This is required for Vercel deployment
 app.debug = True
