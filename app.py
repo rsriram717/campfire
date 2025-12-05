@@ -474,18 +474,36 @@ def get_user_preferences():
             logging.error(f"User not found: {user_name}")
             return jsonify({"error": "User not found"}), 404
 
+        # 1. Get existing preferences
         preferences = UserRestaurantPreference.query.filter_by(user_id=user.id).all()
-        preference_list = []
-        
-        for p in preferences:
-            logging.debug(f"Found preference: restaurant_id={p.restaurant_id}, preference={p.preference}")
-            preference_list.append({
-                "restaurant_id": p.restaurant_id, 
-                "preference": p.preference.value  # Convert enum to string value
+        pref_map = {p.restaurant_id: p.preference.value for p in preferences}
+
+        # 2. Get restaurants recommended to the user (History)
+        # Join UserRequest -> RequestRestaurant -> Restaurant
+        recommended_restaurants = db.session.query(Restaurant).join(RequestRestaurant).join(UserRequest)\
+            .filter(UserRequest.user_id == user.id, RequestRestaurant.type == RequestType.recommendation).all()
+
+        # 3. Get restaurants explicitly rated (even if not recommended recently)
+        rated_restaurants = db.session.query(Restaurant).join(UserRestaurantPreference)\
+            .filter(UserRestaurantPreference.user_id == user.id).all()
+
+        # Combine and deduplicate
+        all_relevant_restaurants = {r.id: r for r in recommended_restaurants + rated_restaurants}.values()
+
+        # Build response
+        restaurant_list = []
+        for r in all_relevant_restaurants:
+            restaurant_list.append({
+                "id": r.id,
+                "name": r.name,
+                "preference": pref_map.get(r.id, "neutral") # Default to neutral if not rated
             })
             
-        logging.debug(f"Returning preferences: {preference_list}")
-        return jsonify({"preferences": preference_list})
+        # Sort by name
+        restaurant_list.sort(key=lambda x: x['name'])
+
+        logging.debug(f"Returning {len(restaurant_list)} restaurants for user {user_name}")
+        return jsonify({"user_name": user.name, "restaurants": restaurant_list})
 
     except Exception as e:
         logging.error(f"Error fetching user preferences: {e}")

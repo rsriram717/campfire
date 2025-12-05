@@ -303,96 +303,83 @@ function initForm() {
 
 // --- Preferences Logic ---
 function initPreferences() {
-    const fetchBtn = document.getElementById('fetch-restaurants');
-    const saveBtn = document.getElementById('save-preferences');
     const listContainer = document.getElementById('restaurant-list');
-    const currentPreferences = new Map();
+    const prefNameSpan = document.getElementById('pref-user-name');
 
-    fetchBtn.addEventListener('click', () => {
+    // Expose load function globally or attach to tab
+    window.loadPreferences = function() {
         const name = UsernameHandler.sanitize(document.getElementById('name').value);
         if (!name) {
-            alert('Please enter your name in the main form first.');
-            // Switch to main tab
-            document.querySelector('[data-tab="recommendations"]').click();
-            document.getElementById('name').focus();
+            listContainer.innerHTML = `
+                <div class="empty-state">
+                    <p>Please enter your name in the main form first.</p>
+                </div>`;
+            prefNameSpan.textContent = "Guest";
             return;
         }
 
-        fetch('/get_restaurants')
+        prefNameSpan.textContent = name;
+        listContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="spinner"></div>
+                <p>Loading your taste profile...</p>
+            </div>`;
+
+        fetch(`/get_user_preferences?name=${encodeURIComponent(name)}`)
             .then(res => res.json())
             .then(data => {
-                if (data.restaurants) {
-                    renderPreferencesList(data.restaurants);
-                    loadUserPreferences(name);
-                    saveBtn.disabled = false;
+                if (data.error) {
+                    listContainer.innerHTML = `<div class="empty-state"><p>${data.error}</p></div>`;
+                    return;
                 }
+                
+                if (data.restaurants && data.restaurants.length > 0) {
+                    renderPreferencesList(data.restaurants, name);
+                } else {
+                     listContainer.innerHTML = `
+                        <div class="empty-state">
+                            <p>No dining history found yet.</p>
+                            <p>Get some recommendations to start building your profile!</p>
+                        </div>`;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                listContainer.innerHTML = `<div class="empty-state"><p>Error loading preferences.</p></div>`;
             });
-    });
+    };
 
-    function renderPreferencesList(restaurants) {
+    function renderPreferencesList(restaurants, userName) {
         listContainer.innerHTML = restaurants.map(r => `
             <div class="preference-card">
                 <h5>${r.name}</h5>
                 <div class="preference-toggle" data-id="${r.id}">
-                    <button type="button" class="like" data-val="like">Like</button>
-                    <button type="button" class="neutral active" data-val="neutral">Neutral</button>
-                    <button type="button" class="dislike" data-val="dislike">Dislike</button>
+                    <button type="button" class="like ${r.preference === 'like' ? 'active' : ''}" data-val="like">Like</button>
+                    <button type="button" class="neutral ${r.preference === 'neutral' ? 'active' : ''}" data-val="neutral">Neutral</button>
+                    <button type="button" class="dislike ${r.preference === 'dislike' ? 'active' : ''}" data-val="dislike">Dislike</button>
                 </div>
             </div>
         `).join('');
 
-        // Attach toggle listeners
+        // Attach toggle listeners with Auto-Save
         document.querySelectorAll('.preference-toggle button').forEach(btn => {
             btn.addEventListener('click', function() {
                 const parent = this.parentElement;
+                
+                // Visual Update
                 parent.querySelectorAll('button').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
-            });
-        });
-    }
-
-    function loadUserPreferences(name) {
-        fetch(`/get_user_preferences?name=${encodeURIComponent(name)}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.preferences) {
-                    data.preferences.forEach(pref => {
-                        const toggle = document.querySelector(`.preference-toggle[data-id="${pref.restaurant_id}"]`);
-                        if (toggle) {
-                            toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                            toggle.querySelector(`button[data-val="${pref.preference}"]`)?.classList.add('active');
-                            currentPreferences.set(pref.restaurant_id, pref.preference);
-                        }
-                    });
+                
+                // Auto-Save
+                const id = parseInt(parent.dataset.id);
+                const val = this.dataset.val;
+                
+                if (userName && id) {
+                    saveSinglePreference(userName, id, val);
                 }
             });
+        });
     }
-
-    saveBtn.addEventListener('click', () => {
-        const name = UsernameHandler.sanitize(document.getElementById('name').value);
-        const updates = [];
-
-        document.querySelectorAll('.preference-toggle').forEach(toggle => {
-            const id = parseInt(toggle.dataset.id);
-            const active = toggle.querySelector('button.active').dataset.val;
-            
-            // Only send if changed from initial/neutral
-            // (Simplification: just send all non-neutral or changed)
-            if (active !== 'neutral' || currentPreferences.get(id) !== 'neutral') {
-                 updates.push({ restaurant_id: id, preference: active });
-            }
-        });
-
-        fetch('/save_preferences', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_name: name, preferences: updates })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) alert('Preferences saved!');
-        });
-    });
 }
 
 // --- Initialization ---
@@ -401,6 +388,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initDropdowns();
     initForm();
     initPreferences();
+
+    // Hook into tab switching
+    document.querySelector('.nav-tab[data-tab="preferences"]').addEventListener('click', () => {
+        if (window.loadPreferences) window.loadPreferences();
+    });
 
     // Init autocomplete for all inputs
     document.querySelectorAll('input[name="restaurant_name"]').forEach(initializeAutocomplete);

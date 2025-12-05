@@ -163,17 +163,19 @@
             <div class="tab-panel" id="preferences-panel">
                 <div class="preferences-container">
                     <div class="panel-header">
-                        <h2>Manage Your Tastes</h2>
+                        <h2>Preferences for <span id="pref-user-name" style="color: var(--accent-orange);">You</span></h2>
                         <p>Rate restaurants to improve your future recommendations</p>
                     </div>
                     
                     <div class="preferences-controls">
-                        <button id="fetch-restaurants" class="cta-button secondary">Show Restaurants</button>
-                        <button id="save-preferences" class="cta-button" disabled>Save Preferences</button>
+                        <!-- Controls removed, auto-loading and auto-saving implemented -->
                     </div>
                     
                     <div id="restaurant-list" class="restaurant-grid">
                         <!-- Preferences populated via JS -->
+                        <div class="empty-state">
+                            <p>Loading your preferences...</p>
+                        </div>
                     </div>
                 </div>
             </div>
