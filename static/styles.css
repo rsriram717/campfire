@@ -50,6 +50,16 @@ body {
     backdrop-filter: blur(10px);
 }
 
+.mobile-menu-btn {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--accent-orange);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
 .header-content {
     max-width: 1200px;
     margin: 0 auto;
@@ -673,20 +683,100 @@ body {
 @media (max-width: 768px) {
     .two-column-layout {
         grid-template-columns: 1fr;
+        gap: 1.5rem;
     }
     
+    .app-main {
+        padding: 1rem;
+    }
+
+    /* Stack Header: Logo/User top, Nav bottom */
     .header-content {
-        flex-direction: column;
-        gap: 1rem;
+        display: grid;
+        grid-template-columns: auto 1fr auto; /* Hamburger, Logo, Profile */
+        align-items: center;
+        gap: 0.5rem;
+        flex-direction: unset; /* Override flex */
+    }
+
+    .mobile-menu-btn {
+        display: block;
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .logo {
+        grid-column: 2;
+        grid-row: 1;
+        justify-content: center;
     }
     
+    .user-profile {
+        position: static; /* Reset absolute */
+        grid-column: 3;
+        grid-row: 1;
+        justify-content: flex-end;
+    }
+
+    /* Collapsible Nav */
     .main-nav {
+        display: none; /* Hidden by default */
+        grid-column: 1 / -1;
+        flex-direction: column;
         width: 100%;
-        overflow-x: auto;
-        padding-bottom: 0.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        margin-top: 0.5rem;
+    }
+    
+    .main-nav.show {
+        display: flex;
+        animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
     .nav-tab {
-        white-space: nowrap;
+        width: 100%;
+        text-align: left;
+        padding: 1rem;
+        border-radius: 8px;
+    }
+
+    .nav-tab.active {
+        background-color: rgba(224, 123, 76, 0.1);
+    }
+
+    /* Centered Titles */
+    .panel-title {
+        text-align: center;
+    }
+
+    /* Larger Inputs for Touch */
+    .input-field, .pill-select {
+        font-size: 16px; /* Prevents iOS zoom */
+        padding: 1rem;
+    }
+    
+    /* Full width filters */
+    .filter-row {
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+
+    /* Stack toggles cleanly */
+    .toggle-row {
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: flex-start;
+    }
+    
+    .toggle-option {
+        padding: 0.5rem;
+        background: rgba(0,0,0,0.1);
+        border-radius: 8px;
     }
 }

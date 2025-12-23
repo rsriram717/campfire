@@ -6,7 +6,7 @@ const NEIGHBORHOODS = {
     'New York': ['Manhattan', 'Brooklyn', 'Williamsburg', 'SoHo', 'East Village', 'Tribeca', 'West Village', 'Upper East Side']
 };
 
-const RESTAURANT_TYPES = ['Casual', 'Sit-Down', 'Bar', 'Fine Dining', 'Cafe'];
+const RESTAURANT_TYPES = ['Casual', 'Fine Dining', 'Bar'];
 
 // --- Username Handling ---
 const UsernameHandler = {
@@ -192,6 +192,11 @@ function renderRecommendations(recommendations) {
 
     // Attach listeners to new buttons
     attachCardListeners();
+
+    // Mobile UX: Scroll to results
+    if (window.innerWidth <= 768) {
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 function attachCardListeners() {
@@ -680,9 +685,40 @@ function initPreferences() {
     }
 }
 
+// --- Mobile Menu Logic ---
+function initMobileMenu() {
+    const menuBtn = document.querySelector('.mobile-menu-btn');
+    const nav = document.querySelector('.main-nav');
+    const tabs = document.querySelectorAll('.nav-tab');
+
+    if (!menuBtn || !nav) return;
+
+    menuBtn.addEventListener('click', () => {
+        nav.classList.toggle('show');
+        // Toggle icon between list and x-lg
+        const icon = menuBtn.querySelector('i');
+        if (nav.classList.contains('show')) {
+            icon.classList.replace('bi-list', 'bi-x-lg');
+        } else {
+            icon.classList.replace('bi-x-lg', 'bi-list');
+        }
+    });
+
+    // Close menu when a tab is clicked
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                nav.classList.remove('show');
+                menuBtn.querySelector('i').classList.replace('bi-x-lg', 'bi-list');
+            }
+        });
+    });
+}
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     initTabs();
+    initMobileMenu();
     initDropdowns();
     initForm();
     initPreferences();
