@@ -293,7 +293,9 @@ def rank_candidates(
             candidate_num = int(num_match.group(1))
             rest = line[num_match.end():]
 
-            # Split by ' - '
+            # Normalize em-dashes and en-dashes to hyphens — Haiku mirrors the
+            # candidate list format (which uses —) in its output, but our delimiter is ' - '
+            rest = rest.replace(' \u2014 ', ' - ').replace(' \u2013 ', ' - ')
             parts = rest.split(' - ')
             name = parts[0].strip() if parts else ""
             reason = ""
@@ -303,7 +305,7 @@ def rank_candidates(
                 raw_reason = parts[1].strip()
                 if raw_reason and raw_reason != "-" and len(raw_reason) > 5:
                     reason = raw_reason
-                description = " - ".join(parts[2:]).strip()
+                description = re.sub(r'^[\s\u002D\u2013\u2014]+', '', " - ".join(parts[2:])).strip()
             elif len(parts) == 2:
                 description = parts[1].strip()
 

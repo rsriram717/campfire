@@ -270,22 +270,20 @@ def get_recommendations():
             req_rest = RequestRestaurant(user_request_id=user_request.id, restaurant_id=restaurant.id, type=RequestType.input)
             db.session.add(req_rest)
         
-        # Get user preferences (full ORM objects for taste profile)
+        # Get user preferences — full ORM objects for both so we have place_ids for hard exclusion
         liked_restaurant_objs = db.session.query(Restaurant).join(UserRestaurantPreference).filter(
             UserRestaurantPreference.user_id == user.id,
             UserRestaurantPreference.preference == PreferenceType.like
         ).all()
-        disliked_restaurants = db.session.query(Restaurant.name).join(UserRestaurantPreference).filter(
+        disliked_restaurant_objs = db.session.query(Restaurant).join(UserRestaurantPreference).filter(
             UserRestaurantPreference.user_id == user.id,
             UserRestaurantPreference.preference == PreferenceType.dislike
         ).all()
 
-        liked_restaurant_names = list({r.name for r in liked_restaurant_objs})
-        disliked_restaurant_names = list({r.name for r in disliked_restaurants})
-
-        # Add current input restaurants to liked list for prompt context
+        # Add current input restaurants to liked context
         all_liked_objs = liked_restaurant_objs + input_restaurants
         liked_restaurant_names = list({r.name for r in all_liked_objs})
+        disliked_restaurant_names = list({r.name for r in disliked_restaurant_objs})
 
         # Build taste profile from liked ORM objects
         taste_profile = build_taste_profile(all_liked_objs)
@@ -293,9 +291,34 @@ def get_recommendations():
         # Get candidate pool fresh from Places API on every request
         candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
 
-        # Hard-filter candidates by requested restaurant type using price_level and primary_type.
-        # This runs before Haiku sees the list, so mismatches are excluded rather than just de-prioritised.
-        if restaurant_types and candidates:
+        # -----------------------------------------------------------------------
+        # CANDIDATE PRE-FILTERING
+        # All rules run before Haiku sees the list. Order matters: exclusions first,
+        # then type filter, then sort. Fallback: if a filter leaves <3 candidates
+        # it is skipped to avoid empty results.
+        # -----------------------------------------------------------------------
+
+        # 1. Exclude non-restaurants (hotels, lodging)
+        LODGING_TYPES = {
+            "hotel", "motel", "lodging", "extended_stay_hotel", "resort_hotel",
+            "bed_and_breakfast", "hostel", "inn", "vacation_rental"
+        }
+        candidates = [
+            c for c in candidates
+            if (c.get("primary_type") or "").lower() not in LODGING_TYPES
+        ]
+
+        # 2. Exclude places the user has already interacted with (liked, disliked, input)
+        excluded_place_ids = {r.place_id for r in all_liked_objs + disliked_restaurant_objs}
+        candidates = [c for c in candidates if c.get("place_id") not in excluded_place_ids]
+
+        # 3. Minimum rating floor — exclude places rated below 3.5
+        RATING_FLOOR = 3.5
+        above_floor = [c for c in candidates if (c.get("rating") or 0) >= RATING_FLOOR]
+        candidates = above_floor if len(above_floor) >= 3 else candidates
+
+        # 4. Type filter — enforce Fine Dining / Bar / Casual using price_level and primary_type
+        if restaurant_types:
             FINE_DINING_PRICES = {"PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"}
             BAR_TYPES = {"bar", "cocktail_bar", "wine_bar", "pub", "bar_and_grill"}
 
@@ -315,10 +338,13 @@ def get_recommendations():
                             return True
                 return False
 
-            filtered = [c for c in candidates if matches_type(c)]
-            # Only apply the filter if it leaves enough candidates; otherwise keep all
-            candidates = filtered if len(filtered) >= 3 else candidates
-            logging.info(f"Type filter ({restaurant_types}): {len(candidates)} candidates remaining")
+            type_filtered = [c for c in candidates if matches_type(c)]
+            candidates = type_filtered if len(type_filtered) >= 3 else candidates
+
+        # 5. Sort by rating descending so highest-quality candidates appear first in the prompt
+        candidates.sort(key=lambda c: c.get("rating") or 0, reverse=True)
+
+        logging.info(f"Candidate pool after filtering: {len(candidates)} restaurants")
 
         if not candidates:
             return jsonify({"error": "Could not retrieve candidate restaurants at this time."}), 500
