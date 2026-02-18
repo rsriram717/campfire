@@ -8,10 +8,33 @@ from .places import PlacesService
 import logging
 import uuid
 
-# City coordinates for location biasing (Lat, Lng)
+# City coordinates for location biasing
 CITY_COORDINATES = {
     "Chicago": {"latitude": 41.8781, "longitude": -87.6298},
     "New York": {"latitude": 40.7128, "longitude": -74.0060}
+}
+
+# Neighbourhood coordinates and search radius (metres)
+NEIGHBORHOOD_COORDINATES = {
+    # Chicago
+    "West Loop":    {"latitude": 41.8827, "longitude": -87.6480, "radius": 2000},
+    "Wicker Park":  {"latitude": 41.9088, "longitude": -87.6795, "radius": 1800},
+    "Lincoln Park": {"latitude": 41.9241, "longitude": -87.6467, "radius": 2200},
+    "River North":  {"latitude": 41.8924, "longitude": -87.6344, "radius": 1500},
+    "Logan Square": {"latitude": 41.9217, "longitude": -87.7077, "radius": 2000},
+    "Pilsen":       {"latitude": 41.8566, "longitude": -87.6618, "radius": 1800},
+    "Gold Coast":   {"latitude": 41.9038, "longitude": -87.6282, "radius": 1500},
+    "Loop":         {"latitude": 41.8827, "longitude": -87.6278, "radius": 1500},
+    "Lakeview":     {"latitude": 41.9400, "longitude": -87.6519, "radius": 2200},
+    # New York
+    "Manhattan":       {"latitude": 40.7831, "longitude": -73.9712, "radius": 3000},
+    "Brooklyn":        {"latitude": 40.6782, "longitude": -73.9442, "radius": 3000},
+    "Williamsburg":    {"latitude": 40.7081, "longitude": -73.9571, "radius": 1800},
+    "SoHo":            {"latitude": 40.7233, "longitude": -74.0030, "radius": 1200},
+    "East Village":    {"latitude": 40.7265, "longitude": -73.9815, "radius": 1200},
+    "Tribeca":         {"latitude": 40.7163, "longitude": -74.0086, "radius": 1200},
+    "West Village":    {"latitude": 40.7358, "longitude": -74.0036, "radius": 1200},
+    "Upper East Side": {"latitude": 40.7736, "longitude": -73.9566, "radius": 2000},
 }
 
 class GooglePlacesService(PlacesService):
@@ -173,6 +196,17 @@ class GooglePlacesService(PlacesService):
             logging.warning(f"No coordinates configured for city: {city}")
             return []
 
+        # Use neighbourhood coordinates + tighter radius if available
+        if neighborhood and neighborhood in NEIGHBORHOOD_COORDINATES:
+            nb = NEIGHBORHOOD_COORDINATES[neighborhood]
+            centre = {"latitude": nb["latitude"], "longitude": nb["longitude"]}
+            search_radius = nb["radius"]
+            logging.debug(f"Using neighbourhood coordinates for {neighborhood} (radius {search_radius}m)")
+        else:
+            centre = CITY_COORDINATES[city]
+            search_radius = radius
+            logging.debug(f"Using city coordinates for {city} (radius {search_radius}m)")
+
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": self.api_key,
@@ -184,8 +218,8 @@ class GooglePlacesService(PlacesService):
             "maxResultCount": max_results,
             "locationRestriction": {
                 "circle": {
-                    "center": CITY_COORDINATES[city],
-                    "radius": radius
+                    "center": centre,
+                    "radius": search_radius
                 }
             }
         }

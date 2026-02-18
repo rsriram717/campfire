@@ -183,7 +183,8 @@ def rank_candidates(
     city: str,
     neighborhood: str = None,
     restaurant_types: list = None,
-    num_recommendations: int = NUM_RECOMMENDATIONS
+    num_recommendations: int = NUM_RECOMMENDATIONS,
+    liked_restaurant_objs: list = None
 ) -> list:
     """
     Use GPT-4 to rank real candidate restaurants and return the top num_recommendations.
@@ -217,6 +218,28 @@ def rank_candidates(
     liked_names_str = ", ".join(liked_names) if liked_names else "none"
     disliked_names_str = ", ".join(disliked_names) if disliked_names else "none"
 
+    # Build liked restaurant profiles for richer "Because you liked" reasoning
+    liked_profiles_section = ""
+    if liked_restaurant_objs:
+        profile_lines = []
+        for r in liked_restaurant_objs:
+            parts = []
+            if r.primary_type:
+                parts.append(r.primary_type)
+            if r.price_level:
+                parts.append(r.price_level)
+            if r.rating is not None:
+                parts.append(f"rating: {r.rating}")
+            if r.serves_dine_in:
+                parts.append("dine-in")
+            if r.reservable:
+                parts.append("reservable")
+            if r.editorial_summary:
+                parts.append(r.editorial_summary)
+            meta = ", ".join(parts)
+            profile_lines.append(f"- {r.name}" + (f": {meta}" if meta else ""))
+        liked_profiles_section = "Liked Restaurant Profiles (use these to understand the user's taste — do not recommend them):\n" + "\n".join(profile_lines) + "\n\n"
+
     neighborhood_section = ""
     if neighborhood:
         neighborhood_section = f"Neighborhood preference: {neighborhood}\n"
@@ -232,6 +255,7 @@ def rank_candidates(
         top_cuisine_types=", ".join(taste_profile.get('top_cuisine_types', [])) or 'any',
         prefers_dine_in=taste_profile.get('prefers_dine_in', 'unknown'),
         prefers_reservable=taste_profile.get('prefers_reservable', 'unknown'),
+        liked_profiles_section=liked_profiles_section,
         liked_names=liked_names_str,
         disliked_names=disliked_names_str,
         neighborhood_section=neighborhood_section,

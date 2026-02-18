@@ -11,7 +11,7 @@ from flask_migrate import Migrate
 import uuid
 import pdb
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Enum, DateTime, inspect, text
 from supabase import create_client, Client
@@ -290,79 +290,17 @@ def get_recommendations():
         # Build taste profile from liked ORM objects
         taste_profile = build_taste_profile(all_liked_objs)
 
-        # Get candidate pool — check DB cache first
-        CACHE_TTL_DAYS = 30
-        fresh_cutoff = datetime.utcnow() - timedelta(days=CACHE_TTL_DAYS)
-        cached_candidates = Restaurant.query.filter(
-            Restaurant.city_hint == city,
-            Restaurant.last_enriched_at >= fresh_cutoff,
-            Restaurant.provider == 'google'
-        ).limit(40).all()
-
-        def restaurant_to_candidate_dict(r):
-            return {
-                "place_id": r.place_id,
-                "name": r.name,
-                "address": r.location,
-                "categories": r.cuisine_type.split(", ") if r.cuisine_type else [],
-                "price_level": r.price_level,
-                "rating": r.rating,
-                "user_rating_count": r.user_rating_count,
-                "editorial_summary": r.editorial_summary,
-                "primary_type": r.primary_type,
-                "serves_dine_in": r.serves_dine_in,
-                "serves_takeout": r.serves_takeout,
-                "serves_delivery": r.serves_delivery,
-                "reservable": r.reservable,
-            }
-
-        if len(cached_candidates) >= 20:
-            logging.info(f"Using {len(cached_candidates)} cached candidates for {city}")
-            candidates = [restaurant_to_candidate_dict(r) for r in cached_candidates]
-        else:
-            logging.info(f"Cache miss for {city} — calling searchNearby")
-            candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
-            # Upsert all returned candidates into DB
-            for c in candidates:
-                if not c.get('place_id') or not c.get('name'):
-                    continue
-                existing = Restaurant.query.filter_by(provider='google', place_id=c['place_id']).first()
-                if existing:
-                    existing.last_enriched_at = datetime.utcnow()
-                    existing.city_hint = city
-                else:
-                    cand_slug = generate_slug(c['name'], city)
-                    if Restaurant.query.filter_by(slug=cand_slug).first():
-                        cand_slug = f"{cand_slug}-{uuid.uuid4().hex[:6]}"
-                    new_cand = Restaurant(
-                        name=c['name'],
-                        location=c.get('address', city),
-                        cuisine_type=", ".join(c.get('categories', [])),
-                        provider='google',
-                        place_id=c['place_id'],
-                        slug=cand_slug,
-                        price_level=c.get('price_level'),
-                        rating=c.get('rating'),
-                        user_rating_count=c.get('user_rating_count'),
-                        editorial_summary=c.get('editorial_summary'),
-                        primary_type=c.get('primary_type'),
-                        serves_dine_in=c.get('serves_dine_in'),
-                        serves_takeout=c.get('serves_takeout'),
-                        serves_delivery=c.get('serves_delivery'),
-                        reservable=c.get('reservable'),
-                        last_enriched_at=datetime.utcnow(),
-                        city_hint=city
-                    )
-                    db.session.add(new_cand)
-            db.session.flush()
+        # Get candidate pool fresh from Places API on every request
+        candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
 
         if not candidates:
             return jsonify({"error": "Could not retrieve candidate restaurants at this time."}), 500
 
-        # Use GPT-4 to rank real candidates
+        # Rank candidates using Haiku, with liked restaurant profiles as reference
         ranked = rank_candidates(
             taste_profile=taste_profile,
             candidates=candidates,
+            liked_restaurant_objs=all_liked_objs,
             liked_names=liked_restaurant_names,
             disliked_names=disliked_restaurant_names,
             city=city,

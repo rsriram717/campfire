@@ -7,13 +7,14 @@ User Taste Profile:
 - Prefers dine-in: {prefers_dine_in}
 - Prefers reservable: {prefers_reservable}
 
-Already liked (do not recommend): {liked_names}
+{liked_profiles_section}Already liked (do not recommend): {liked_names}
 Disliked (avoid similar): {disliked_names}
 {neighborhood_section}{type_section}
 Candidates (only choose from this list):
 {candidates_numbered}
 
-For each selected restaurant, identify **two specific restaurant names** from the liked list that inspired your choice (e.g. "Because you liked The Purple Pig and Au Cheval").
+Use the liked restaurant profiles above to write specific, grounded explanations. Reference concrete similarities — cuisine type, price point, vibe, or service style — not just names.
+For each selected restaurant, cite two specific restaurant names from the liked list (e.g. "Because you liked Au Cheval and Girl & The Goat").
 Only cite specific restaurant names — never cite categories or general preferences.
 If you cannot identify specific connections, leave the middle section empty (e.g. "N. Name - - Description").
 Then provide a brief (10-15 word) description of why it's a good match.
