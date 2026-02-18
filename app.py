@@ -293,6 +293,33 @@ def get_recommendations():
         # Get candidate pool fresh from Places API on every request
         candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
 
+        # Hard-filter candidates by requested restaurant type using price_level and primary_type.
+        # This runs before Haiku sees the list, so mismatches are excluded rather than just de-prioritised.
+        if restaurant_types and candidates:
+            FINE_DINING_PRICES = {"PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"}
+            BAR_TYPES = {"bar", "cocktail_bar", "wine_bar", "pub", "bar_and_grill"}
+
+            def matches_type(c):
+                price = c.get("price_level") or ""
+                ptype = (c.get("primary_type") or "").lower()
+                cats = [t.lower() for t in c.get("categories", [])]
+                for rt in restaurant_types:
+                    if rt == "Fine Dining":
+                        if price in FINE_DINING_PRICES or ptype == "fine_dining_restaurant":
+                            return True
+                    elif rt == "Bar":
+                        if ptype in BAR_TYPES or any(t in BAR_TYPES for t in cats):
+                            return True
+                    elif rt == "Casual":
+                        if ptype != "fine_dining_restaurant" and price != "PRICE_LEVEL_VERY_EXPENSIVE":
+                            return True
+                return False
+
+            filtered = [c for c in candidates if matches_type(c)]
+            # Only apply the filter if it leaves enough candidates; otherwise keep all
+            candidates = filtered if len(filtered) >= 3 else candidates
+            logging.info(f"Type filter ({restaurant_types}): {len(candidates)} candidates remaining")
+
         if not candidates:
             return jsonify({"error": "Could not retrieve candidate restaurants at this time."}), 500
 

@@ -213,8 +213,16 @@ class GooglePlacesService(PlacesService):
             "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.types,places.priceLevel,places.rating,places.userRatingCount,places.editorialSummary,places.primaryType,places.dineIn,places.takeout,places.delivery,places.reservable"
         }
 
+        # Map frontend type selections to Google Place types for Bar searches.
+        # Fine Dining and Casual stay broad ("restaurant") and are filtered post-fetch
+        # using price_level, since Google's fine_dining_restaurant type is inconsistent.
+        if restaurant_types and "Bar" in restaurant_types and len(restaurant_types) == 1:
+            included_types = ["bar", "cocktail_bar", "wine_bar", "pub"]
+        else:
+            included_types = ["restaurant"]
+
         body = {
-            "includedTypes": ["restaurant"],
+            "includedTypes": included_types,
             "maxResultCount": max_results,
             "locationRestriction": {
                 "circle": {
