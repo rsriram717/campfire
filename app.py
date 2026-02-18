@@ -11,7 +11,7 @@ from flask_migrate import Migrate
 import uuid
 import pdb
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import Enum, DateTime, inspect, text
 from supabase import create_client, Client
@@ -19,7 +19,7 @@ from supabase import create_client, Client
 from services import places_service
 from utils import generate_slug
 
-from openai_example import get_similar_restaurants, sanitize_name
+from openai_example import build_taste_profile, rank_candidates
 from models import db, User, Restaurant, UserRequest, RequestRestaurant, RequestType, UserRestaurantPreference, PreferenceType, FeedbackSuggestion, FeedbackVote
 
 # Initialize Flask app, explicitly setting a writable instance path for Vercel
@@ -111,15 +111,17 @@ if ENVIRONMENT == 'production':
             # Check if alembic_version table exists and has our initial migration
             initial_migration_id = 'c9e344f09bd8'  # from our initial migration file
             cuisine_type_migration_id = '2024_03_14_01'  # from increase_cuisine_type_length.py
+            rich_metadata_migration_id = 'a1b2c3d4e5f6'  # add_rich_metadata_to_restaurant
+            up_to_date_ids = {cuisine_type_migration_id, rich_metadata_migration_id}
             has_alembic = 'alembic_version' in existing_tables
             should_run_migrations = True
-            
+
             if has_alembic:
                 # Check if our migrations are recorded
                 with db.engine.connect() as conn:
                     result = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
                     logging.info(f"Current migration version: {result}")
-                    if result == cuisine_type_migration_id:
+                    if result in up_to_date_ids:
                         logging.info("All migrations already applied, skipping migrations")
                         should_run_migrations = False
                     elif result == initial_migration_id:
@@ -239,10 +241,21 @@ def get_recommendations():
                 restaurant = Restaurant(
                     name=details.get('name'),
                     location=details.get('address', ''),
-                    cuisine_type=", ".join(details.get('categories', [])),  # Join list into string
+                    cuisine_type=", ".join(details.get('categories', [])),
                     provider=provider,
                     place_id=place_id,
-                    slug=slug
+                    slug=slug,
+                    price_level=details.get('price_level'),
+                    rating=details.get('rating'),
+                    user_rating_count=details.get('user_rating_count'),
+                    editorial_summary=details.get('editorial_summary'),
+                    primary_type=details.get('primary_type'),
+                    serves_dine_in=details.get('serves_dine_in'),
+                    serves_takeout=details.get('serves_takeout'),
+                    serves_delivery=details.get('serves_delivery'),
+                    reservable=details.get('reservable'),
+                    last_enriched_at=datetime.utcnow(),
+                    city_hint=city
                 )
                 logging.info(f"Restaurant object created: {restaurant.__dict__}")
                 
@@ -257,123 +270,150 @@ def get_recommendations():
             req_rest = RequestRestaurant(user_request_id=user_request.id, restaurant_id=restaurant.id, type=RequestType.input)
             db.session.add(req_rest)
         
-        # Get user preferences
-        liked_restaurants = db.session.query(Restaurant.name).join(UserRestaurantPreference).filter(UserRestaurantPreference.user_id == user.id, UserRestaurantPreference.preference == PreferenceType.like).all()
-        disliked_restaurants = db.session.query(Restaurant.name).join(UserRestaurantPreference).filter(UserRestaurantPreference.user_id == user.id, UserRestaurantPreference.preference == PreferenceType.dislike).all()
+        # Get user preferences (full ORM objects for taste profile)
+        liked_restaurant_objs = db.session.query(Restaurant).join(UserRestaurantPreference).filter(
+            UserRestaurantPreference.user_id == user.id,
+            UserRestaurantPreference.preference == PreferenceType.like
+        ).all()
+        disliked_restaurants = db.session.query(Restaurant.name).join(UserRestaurantPreference).filter(
+            UserRestaurantPreference.user_id == user.id,
+            UserRestaurantPreference.preference == PreferenceType.dislike
+        ).all()
 
-        liked_restaurant_names = [r.name for r in liked_restaurants]
-        disliked_restaurant_names = [r.name for r in disliked_restaurants]
-        
-        # Add current input to liked list for prompt context
-        liked_restaurant_names.extend([r.name for r in input_restaurants])
+        liked_restaurant_names = list({r.name for r in liked_restaurant_objs})
+        disliked_restaurant_names = list({r.name for r in disliked_restaurants})
 
-        # Get recommendations from OpenAI
-        recommendations = get_similar_restaurants(
-            liked_restaurants=list(set(liked_restaurant_names)), # De-duplicate
-            disliked_restaurants=list(set(disliked_restaurant_names)), # De-duplicate
+        # Add current input restaurants to liked list for prompt context
+        all_liked_objs = liked_restaurant_objs + input_restaurants
+        liked_restaurant_names = list({r.name for r in all_liked_objs})
+
+        # Build taste profile from liked ORM objects
+        taste_profile = build_taste_profile(all_liked_objs)
+
+        # Get candidate pool — check DB cache first
+        CACHE_TTL_DAYS = 30
+        fresh_cutoff = datetime.utcnow() - timedelta(days=CACHE_TTL_DAYS)
+        cached_candidates = Restaurant.query.filter(
+            Restaurant.city_hint == city,
+            Restaurant.last_enriched_at >= fresh_cutoff,
+            Restaurant.provider == 'google'
+        ).limit(40).all()
+
+        def restaurant_to_candidate_dict(r):
+            return {
+                "place_id": r.place_id,
+                "name": r.name,
+                "address": r.location,
+                "categories": r.cuisine_type.split(", ") if r.cuisine_type else [],
+                "price_level": r.price_level,
+                "rating": r.rating,
+                "user_rating_count": r.user_rating_count,
+                "editorial_summary": r.editorial_summary,
+                "primary_type": r.primary_type,
+                "serves_dine_in": r.serves_dine_in,
+                "serves_takeout": r.serves_takeout,
+                "serves_delivery": r.serves_delivery,
+                "reservable": r.reservable,
+            }
+
+        if len(cached_candidates) >= 20:
+            logging.info(f"Using {len(cached_candidates)} cached candidates for {city}")
+            candidates = [restaurant_to_candidate_dict(r) for r in cached_candidates]
+        else:
+            logging.info(f"Cache miss for {city} — calling searchNearby")
+            candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
+            # Upsert all returned candidates into DB
+            for c in candidates:
+                if not c.get('place_id') or not c.get('name'):
+                    continue
+                existing = Restaurant.query.filter_by(provider='google', place_id=c['place_id']).first()
+                if existing:
+                    existing.last_enriched_at = datetime.utcnow()
+                    existing.city_hint = city
+                else:
+                    cand_slug = generate_slug(c['name'], city)
+                    if Restaurant.query.filter_by(slug=cand_slug).first():
+                        cand_slug = f"{cand_slug}-{uuid.uuid4().hex[:6]}"
+                    new_cand = Restaurant(
+                        name=c['name'],
+                        location=c.get('address', city),
+                        cuisine_type=", ".join(c.get('categories', [])),
+                        provider='google',
+                        place_id=c['place_id'],
+                        slug=cand_slug,
+                        price_level=c.get('price_level'),
+                        rating=c.get('rating'),
+                        user_rating_count=c.get('user_rating_count'),
+                        editorial_summary=c.get('editorial_summary'),
+                        primary_type=c.get('primary_type'),
+                        serves_dine_in=c.get('serves_dine_in'),
+                        serves_takeout=c.get('serves_takeout'),
+                        serves_delivery=c.get('serves_delivery'),
+                        reservable=c.get('reservable'),
+                        last_enriched_at=datetime.utcnow(),
+                        city_hint=city
+                    )
+                    db.session.add(new_cand)
+            db.session.flush()
+
+        if not candidates:
+            return jsonify({"error": "Could not retrieve candidate restaurants at this time."}), 500
+
+        # Use GPT-4 to rank real candidates
+        ranked = rank_candidates(
+            taste_profile=taste_profile,
+            candidates=candidates,
+            liked_names=liked_restaurant_names,
+            disliked_names=disliked_restaurant_names,
             city=city,
             neighborhood=neighborhood,
             restaurant_types=restaurant_types
         )
-        
-        if not recommendations:
+
+        if not ranked:
             return jsonify({"error": "Could not retrieve recommendations at this time."}), 500
-        
-        # Process and save recommendations
+
+        # Save ranked recommendations as Restaurant records and RequestRestaurant links
         output_restaurants = []
-        for rec in recommendations:
-            sanitized_name = sanitize_name(rec['name'])
-            
-            # RESOLUTION LOGIC START
-            resolved_restaurant = None
-            
-            # 1. Search for the place using Google Autocomplete
-            # Generate a session token for this specific resolution attempt (Search + Details)
-            resolution_session_token = str(uuid.uuid4())
-            
-            logging.debug(f"Attempting to resolve AI recommendation: {sanitized_name}")
-            search_results = places_service.autocomplete(sanitized_name, city, session_token=resolution_session_token)
-            
-            if search_results and len(search_results) > 0:
-                top_match = search_results[0]
-                resolved_place_id = top_match['place_id']
-                logging.debug(f"Resolved '{sanitized_name}' to Google Place ID: {resolved_place_id}")
-                
-                # 2. Check if we already have this canonical place
-                existing_restaurant = Restaurant.query.filter_by(place_id=resolved_place_id).first()
-                
-                if existing_restaurant:
-                    logging.debug(f"Found existing restaurant in DB: {existing_restaurant.name}")
-                    resolved_restaurant = existing_restaurant
-                else:
-                    # 3. Fetch details and create new canonical restaurant
-                    logging.debug(f"Fetching details for new place: {resolved_place_id}")
-                    details = places_service.get_details(resolved_place_id, session_token=resolution_session_token)
-                    
-                    if details:
-                        # Use the official name from Google
-                        official_name = details.get('name', sanitized_name)
-                        slug = generate_slug(official_name, city)
-                        
-                        # Handle potential slug collision (rare but possible if names are identical)
-                        if Restaurant.query.filter_by(slug=slug).first():
-                            slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+        for rec in ranked:
+            rec_place_id = rec.get('place_id')
+            if not rec_place_id:
+                continue
 
-                        new_restaurant = Restaurant(
-                            name=official_name,
-                            location=details.get('address', city),
-                            cuisine_type=", ".join(details.get('categories', [])),
-                            provider='google', # Official provider
-                            place_id=resolved_place_id,
-                            slug=slug
-                        )
-                        db.session.add(new_restaurant)
-                        db.session.flush()
-                        resolved_restaurant = new_restaurant
-                        logging.info(f"Created new canonical restaurant: {official_name} ({resolved_place_id})")
-                    else:
-                        logging.warning(f"Failed to get details for {resolved_place_id}")
-            
-            # Fallback: If resolution failed, use the old 'campfire_ai' method
+            resolved_restaurant = Restaurant.query.filter_by(provider='google', place_id=rec_place_id).first()
             if not resolved_restaurant:
-                logging.warning(f"Could not resolve '{sanitized_name}'. Falling back to 'campfire_ai'.")
-                slug = generate_slug(sanitized_name, city)
-                existing_restaurant = Restaurant.query.filter(Restaurant.slug == slug).first()
-                
-                if existing_restaurant:
-                     resolved_restaurant = existing_restaurant
-                else:
-                    new_rec_restaurant = Restaurant(
-                        name=sanitized_name,
-                        location=city, 
-                        cuisine_type="",
-                        provider='campfire_ai',
-                        place_id=slug, # Use slug as placeholder
-                        slug=slug
-                    )
-                    db.session.add(new_rec_restaurant)
-                    db.session.flush()
-                    resolved_restaurant = new_rec_restaurant
-
-            # Create the RequestRestaurant link
-            if resolved_restaurant:
-                req_rec = RequestRestaurant(
-                    user_request_id=user_request.id,
-                    restaurant_id=resolved_restaurant.id,
-                    type=RequestType.recommendation
+                slug = generate_slug(rec['name'], city)
+                if Restaurant.query.filter_by(slug=slug).first():
+                    slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+                resolved_restaurant = Restaurant(
+                    name=rec['name'],
+                    location=rec.get('address', city),
+                    cuisine_type="",
+                    provider='google',
+                    place_id=rec_place_id,
+                    slug=slug,
+                    price_level=rec.get('price_level'),
+                    rating=rec.get('rating'),
+                    last_enriched_at=datetime.utcnow(),
+                    city_hint=city
                 )
-                db.session.add(req_rec)
-                
-                # Update the output with the canonical name/description
-                # We preserve the AI description as it explains *why* it was recommended
-                output_restaurants.append({
-                    "id": resolved_restaurant.id,
-                    "name": resolved_restaurant.name,
-                    "description": rec['description'],
-                    "reason": rec.get('reason'), # Pass the "Because you liked..." context
-                    "address": resolved_restaurant.location # Useful for frontend
-                })
-            # RESOLUTION LOGIC END
+                db.session.add(resolved_restaurant)
+                db.session.flush()
+
+            req_rec = RequestRestaurant(
+                user_request_id=user_request.id,
+                restaurant_id=resolved_restaurant.id,
+                type=RequestType.recommendation
+            )
+            db.session.add(req_rec)
+
+            output_restaurants.append({
+                "id": resolved_restaurant.id,
+                "name": resolved_restaurant.name,
+                "description": rec.get('description', ''),
+                "reason": rec.get('reason'),
+                "address": resolved_restaurant.location
+            })
 
         db.session.commit()
         return jsonify({"recommendations": output_restaurants})

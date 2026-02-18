@@ -111,7 +111,7 @@ class GooglePlacesService(PlacesService):
             "X-Goog-Api-Key": self.api_key,
             # Specify fields to return (FieldMask is required/recommended for billing control)
             # Fields are camelCase in v1.
-            "X-Goog-FieldMask": "id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,types"
+            "X-Goog-FieldMask": "id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,types,priceLevel,rating,userRatingCount,editorialSummary,primaryType,dineIn,takeout,delivery,reservable"
         }
 
         params = {}
@@ -143,7 +143,91 @@ class GooglePlacesService(PlacesService):
                 "phone": place.get("nationalPhoneNumber"),
                 "website": place.get("websiteUri"),
                 "categories": place.get("types", []),
+                "price_level": place.get("priceLevel"),
+                "rating": place.get("rating"),
+                "user_rating_count": place.get("userRatingCount"),
+                "editorial_summary": place.get("editorialSummary", {}).get("text"),
+                "primary_type": place.get("primaryType"),
+                "serves_dine_in": place.get("dineIn"),
+                "serves_takeout": place.get("takeout"),
+                "serves_delivery": place.get("delivery"),
+                "reservable": place.get("reservable"),
             }
         except requests.RequestException as e:
             logging.error(f"Error calling Google Places API: {e}")
-            return None 
+            return None
+
+    def search_nearby_candidates(
+        self,
+        city: str,
+        neighborhood: Optional[str] = None,
+        restaurant_types: Optional[List] = None,
+        radius: int = 8000,
+        max_results: int = 20
+    ) -> List[Dict]:
+        if not self.api_key:
+            logging.error("GOOGLE_API_KEY is not set.")
+            return []
+
+        if city not in CITY_COORDINATES:
+            logging.warning(f"No coordinates configured for city: {city}")
+            return []
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": self.api_key,
+            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.types,places.priceLevel,places.rating,places.userRatingCount,places.editorialSummary,places.primaryType,places.dineIn,places.takeout,places.delivery,places.reservable"
+        }
+
+        body = {
+            "includedTypes": ["restaurant"],
+            "maxResultCount": max_results,
+            "locationRestriction": {
+                "circle": {
+                    "center": CITY_COORDINATES[city],
+                    "radius": radius
+                }
+            }
+        }
+
+        try:
+            logging.debug(f"Calling Google Places searchNearby for city: {city}")
+            response = requests.post(f"{self.base_url}/places:searchNearby", headers=headers, json=body)
+
+            if response.status_code != 200:
+                logging.error(f"Google searchNearby Error ({response.status_code}): {response.text}")
+                return []
+
+            data = response.json()
+            places = data.get("places", [])
+            logging.debug(f"searchNearby returned {len(places)} candidates for {city}")
+
+            results = []
+            for place in places:
+                raw_id = place.get("id", "")
+                if not raw_id:
+                    raw_id = place.get("name", "").replace("places/", "")
+
+                results.append({
+                    "name": place.get("displayName", {}).get("text"),
+                    "place_id": raw_id,
+                    "address": place.get("formattedAddress"),
+                    "phone": None,
+                    "website": None,
+                    "categories": place.get("types", []),
+                    "price_level": place.get("priceLevel"),
+                    "rating": place.get("rating"),
+                    "user_rating_count": place.get("userRatingCount"),
+                    "editorial_summary": place.get("editorialSummary", {}).get("text"),
+                    "primary_type": place.get("primaryType"),
+                    "serves_dine_in": place.get("dineIn"),
+                    "serves_takeout": place.get("takeout"),
+                    "serves_delivery": place.get("delivery"),
+                    "reservable": place.get("reservable"),
+                })
+
+            return results
+
+        except requests.RequestException as e:
+            logging.error(f"Error calling Google searchNearby API: {e}")
+            return []

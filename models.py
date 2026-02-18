@@ -23,6 +23,18 @@ class Restaurant(db.Model):
     place_id = db.Column(db.String(128), nullable=False)
     slug = db.Column(db.String(200), nullable=False)
 
+    price_level        = db.Column(db.String(50), nullable=True)
+    rating             = db.Column(db.Float, nullable=True)
+    user_rating_count  = db.Column(db.Integer, nullable=True)
+    editorial_summary  = db.Column(db.Text, nullable=True)
+    primary_type       = db.Column(db.String(100), nullable=True)
+    serves_dine_in     = db.Column(db.Boolean, nullable=True)
+    serves_takeout     = db.Column(db.Boolean, nullable=True)
+    serves_delivery    = db.Column(db.Boolean, nullable=True)
+    reservable         = db.Column(db.Boolean, nullable=True)
+    last_enriched_at   = db.Column(db.DateTime, nullable=True)
+    city_hint          = db.Column(db.String(100), nullable=True)
+
     preferences = db.relationship('UserRestaurantPreference', back_populates='restaurant')
     # Can't have two relationships with the same back_populates.
     # recommendations = db.relationship('Recommendation', back_populates='restaurant') 

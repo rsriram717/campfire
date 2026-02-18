@@ -42,6 +42,10 @@ class YelpService(PlacesService):
             print(f"Error calling Yelp API: {e}")
             return []
 
+    def search_nearby_candidates(self, city, neighborhood=None, restaurant_types=None, radius=8000, max_results=20):
+        # Yelp is now paid; returning empty list to satisfy abstract interface
+        return []
+
     def get_details(self, place_id: str, session_token: Optional[str] = None) -> dict:
         if not self.api_key:
             return {}
