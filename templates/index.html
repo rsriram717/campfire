@@ -45,9 +45,14 @@
             <div class="tab-panel active" id="recommendations-panel">
 
                 <!-- Welcome message -->
-                <p style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin: 0 auto 1.5rem; max-width: 520px; line-height: 1.6;">
-                    Welcome, friend. If you're looking for your next spot, here's the place. Put in some restaurants you've liked before and you might find something new that suits your palate. The more you use it, the better the suggestions become. Go ahead — give it a try.
-                </p>
+                <div style="text-align: center; margin: 0 auto 2rem; max-width: 480px;">
+                    <p style="color: var(--accent-orange); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 0.75rem;">Welcome, friend</p>
+                    <hr style="border: none; border-top: 1px solid var(--border-color); margin: 0 auto 0.75rem; width: 40%;">
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.7; margin: 0;">
+                        Looking for your next spot? Put in some restaurants you've liked before and you might find something new that suits your palate.<br>
+                        The more you use it, the better the suggestions become.
+                    </p>
+                </div>
 
                 <form id="restaurant-form" class="two-column-layout">
                     
@@ -123,14 +128,14 @@
                         </div>
 
                         <!-- Input vs. History Weighting Slider -->
-                        <div class="form-section" style="margin-bottom: 1rem;">
-                            <div class="field-header" style="margin-bottom: 0.5rem;">
+                        <div class="form-section" style="margin-bottom: 2.5rem;">
+                            <div class="field-header" style="margin-bottom: 1rem;">
                                 <i class="bi bi-sliders field-icon"></i>
                                 <span class="field-label">Base recommendations on</span>
                             </div>
                             <input type="range" id="input-weight-slider" min="0" max="100" step="10" value="70"
                                 style="width: 100%; accent-color: var(--accent-orange);">
-                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.75rem;">
                                 <span>My History</span>
                                 <span id="input-weight-label">This Session (70%)</span>
                                 <span>This Session</span>
@@ -138,14 +143,14 @@
                         </div>
 
                         <!-- Revisit vs. New Slider -->
-                        <div class="form-section" style="margin-bottom: 1rem;">
-                            <div class="field-header" style="margin-bottom: 0.5rem;">
+                        <div class="form-section" style="margin-bottom: 2.5rem;">
+                            <div class="field-header" style="margin-bottom: 1rem;">
                                 <i class="bi bi-arrow-counterclockwise field-icon"></i>
                                 <span class="field-label">Show me</span>
                             </div>
                             <input type="range" id="revisit-weight-slider" min="0" max="100" step="25" value="0"
                                 style="width: 100%; accent-color: var(--accent-orange);">
-                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.75rem;">
                                 <span>All New</span>
                                 <span id="revisit-weight-label">All New</span>
                                 <span>Revisit</span>
