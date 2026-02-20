@@ -23,6 +23,10 @@
         - `styles.css`: No specific styles for a "verified" or "selected" state on inputs.
     - **Action**: Add a visual indicator (icon or class) when `awesomplete-selectcomplete` fires.
 
+- [ ] **Liked restaurant name typo in reason field** *(low priority)*
+    - **Observation**: The `reason` field sometimes contains a misspelling of a liked restaurant name (e.g. "Au Chavel" instead of "Au Cheval"). Haiku reconstructs the name from context rather than copying it verbatim.
+    - **Action**: Post-process `reason` text in `rank_candidates()` — fuzzy-match each word sequence against the canonical liked restaurant names and substitute the correct spelling.
+
 - [ ] **Improve loading states**
     - **Observation**: Loading UI is basic.
     - **Evidence**: 
