@@ -1,5 +1,8 @@
 # Campfire - Project Context
 
+## Development Guidelines
+- **Documentation**: Every new feature must include updates to `README.md`, `CLAUDE.md`, and `memory/MEMORY.md` before committing.
+
 ## What It Is
 AI-powered restaurant recommendation web app. Users input favorite restaurants → Claude Haiku ranks real Google Places candidates and returns 3 personalized picks, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.
 
