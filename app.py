@@ -112,7 +112,7 @@ if ENVIRONMENT == 'production':
             initial_migration_id = 'c9e344f09bd8'  # from our initial migration file
             cuisine_type_migration_id = '2024_03_14_01'  # from increase_cuisine_type_length.py
             rich_metadata_migration_id = 'a1b2c3d4e5f6'  # add_rich_metadata_to_restaurant
-            up_to_date_ids = {cuisine_type_migration_id, rich_metadata_migration_id}
+            up_to_date_ids = {cuisine_type_migration_id, rich_metadata_migration_id, '078519919b65'}
             has_alembic = 'alembic_version' in existing_tables
             should_run_migrations = True
 
