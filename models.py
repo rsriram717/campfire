@@ -17,7 +17,7 @@ class Restaurant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     location = db.Column(db.String(100), nullable=False)
-    cuisine_type = db.Column(db.String(200))
+    cuisine_type = db.Column(db.Text)
     
     provider = db.Column(db.String(20), default="google", nullable=False)
     place_id = db.Column(db.String(128), nullable=False)

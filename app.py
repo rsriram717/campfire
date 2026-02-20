@@ -112,7 +112,8 @@ if ENVIRONMENT == 'production':
             initial_migration_id = 'c9e344f09bd8'  # from our initial migration file
             cuisine_type_migration_id = '2024_03_14_01'  # from increase_cuisine_type_length.py
             rich_metadata_migration_id = 'a1b2c3d4e5f6'  # add_rich_metadata_to_restaurant
-            up_to_date_ids = {cuisine_type_migration_id, rich_metadata_migration_id, '078519919b65'}
+            cuisine_type_text_migration_id = 'b2c3d4e5f6a7'  # cuisine_type_to_text
+            up_to_date_ids = {cuisine_type_migration_id, rich_metadata_migration_id, '078519919b65', cuisine_type_text_migration_id}
             has_alembic = 'alembic_version' in existing_tables
             should_run_migrations = True
 
@@ -152,9 +153,9 @@ if ENVIRONMENT == 'production':
                     
                     # Ensure cuisine_type column is the right length
                     with db.engine.connect() as conn:
-                        conn.execute(text("ALTER TABLE restaurant ALTER COLUMN cuisine_type TYPE VARCHAR(200)"))
+                        conn.execute(text("ALTER TABLE restaurant ALTER COLUMN cuisine_type TYPE TEXT"))
                         conn.commit()
-                        logging.info("Updated cuisine_type column length to 200")
+                        logging.info("Updated cuisine_type column to TEXT")
             
             # Verify final table state
             if 'restaurant' in existing_tables:
