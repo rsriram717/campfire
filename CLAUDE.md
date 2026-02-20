@@ -2,6 +2,7 @@
 
 ## Development Guidelines
 - **Documentation**: Every new feature must include updates to `README.md`, `CLAUDE.md`, and `memory/MEMORY.md` before committing.
+- **Feature planning**: Before implementing any non-trivial feature, write a plan to `features/<feature-name>.md`. Implement against that plan. Delete the file when the feature ships — the commit history is the permanent record.
 
 ## What It Is
 AI-powered restaurant recommendation web app. Users input favorite restaurants → Claude Haiku ranks real Google Places candidates and returns 3 personalized picks, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.
