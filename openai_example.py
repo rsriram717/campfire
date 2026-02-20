@@ -33,7 +33,7 @@ def load_rank_prompt_template():
         return file.read()
 
 def get_similar_restaurants(liked_restaurants, disliked_restaurants, city, neighborhood=None, restaurant_types=None):
-    logging.debug("Constructing prompt for GPT-4.")
+    logging.debug("Constructing legacy prompt.")
 
     # Load the prompt template
     prompt_template = load_prompt_template()
@@ -69,7 +69,7 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city, neigh
     )
 
     try:
-        logging.debug(f"Sending request to GPT-4 API with prompt: {prompt}")
+        logging.debug(f"Sending request to OpenAI API with prompt: {prompt}")
         client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4",  # Specify GPT-4 model
@@ -130,47 +130,105 @@ def get_similar_restaurants(liked_restaurants, disliked_restaurants, city, neigh
         return recommendations
 
     except Exception as e:
-        logging.error(f"Error with GPT-4 API: {e}")
+        logging.error(f"Error with OpenAI API: {e}")
         return []
 
 
-def build_taste_profile(liked_restaurants: list) -> dict:
+def _weighted_counter(history_items, input_items, alpha, key_fn):
+    """Weighted voting for categorical features. Returns a Counter with fractional weights."""
+    h_valid = [key_fn(r) for r in history_items if key_fn(r)]
+    i_valid = [key_fn(r) for r in input_items if key_fn(r)]
+
+    if not h_valid and not i_valid:
+        return Counter()
+
+    if h_valid and i_valid:
+        h_w = (1 - alpha) / len(h_valid)
+        i_w = alpha / len(i_valid)
+    elif h_valid:
+        h_w = 1.0 / len(h_valid)
+        i_w = 0.0
+    else:
+        h_w = 0.0
+        i_w = 1.0 / len(i_valid)
+
+    counts = Counter()
+    for v in h_valid:
+        counts[v] += h_w
+    for v in i_valid:
+        counts[v] += i_w
+    return counts
+
+
+def _weighted_bool(history_items, input_items, alpha, key_fn):
+    """Weighted boolean preference. Returns True/False/None."""
+    h_vals = [1.0 if key_fn(r) else 0.0 for r in history_items if key_fn(r) is not None]
+    i_vals = [1.0 if key_fn(r) else 0.0 for r in input_items if key_fn(r) is not None]
+
+    if not h_vals and not i_vals:
+        return None
+
+    if h_vals and i_vals:
+        h_w = (1 - alpha) / len(h_vals)
+        i_w = alpha / len(i_vals)
+    elif h_vals:
+        h_w = 1.0 / len(h_vals)
+        i_w = 0.0
+    else:
+        h_w = 0.0
+        i_w = 1.0 / len(i_vals)
+
+    weighted_sum = sum(h_w * v for v in h_vals) + sum(i_w * v for v in i_vals)
+    return weighted_sum >= 0.5
+
+
+def build_taste_profile(history_objs: list, input_objs: list, alpha: float = 0.7) -> dict:
     """
-    Derive a structured taste profile from a list of liked Restaurant ORM objects.
+    Derive a weighted taste profile from history and current session inputs.
+    alpha=1.0 means inputs fully control; alpha=0.0 means history fully controls.
     Returns a dict with aggregated preferences. Returns empty dict if no signal available.
     """
-    if not liked_restaurants:
+    if not history_objs and not input_objs:
         return {}
 
-    price_levels = [r.price_level for r in liked_restaurants if r.price_level]
-    ratings = [r.rating for r in liked_restaurants if r.rating is not None]
-    primary_types = [r.primary_type for r in liked_restaurants if r.primary_type]
+    price_counter = _weighted_counter(history_objs, input_objs, alpha, lambda r: r.price_level)
+    type_counter = _weighted_counter(history_objs, input_objs, alpha, lambda r: r.primary_type)
 
-    # Fields where we check >=50% preference
-    dine_in_vals = [r.serves_dine_in for r in liked_restaurants if r.serves_dine_in is not None]
-    takeout_vals = [r.serves_takeout for r in liked_restaurants if r.serves_takeout is not None]
-    reservable_vals = [r.reservable for r in liked_restaurants if r.reservable is not None]
+    h_ratings = [r.rating for r in history_objs if r.rating is not None]
+    i_ratings = [r.rating for r in input_objs if r.rating is not None]
+    if h_ratings and i_ratings:
+        h_w = (1 - alpha) / len(h_ratings)
+        i_w = alpha / len(i_ratings)
+        avg_rating = sum(h_w * v for v in h_ratings) + sum(i_w * v for v in i_ratings)
+    elif h_ratings:
+        avg_rating = sum(h_ratings) / len(h_ratings)
+    elif i_ratings:
+        avg_rating = sum(i_ratings) / len(i_ratings)
+    else:
+        avg_rating = None
 
     profile = {}
 
-    if price_levels:
-        # Most common price level
-        profile['preferred_price_level'] = Counter(price_levels).most_common(1)[0][0]
+    if price_counter:
+        profile['preferred_price_level'] = price_counter.most_common(1)[0][0]
 
-    if ratings:
-        profile['min_rating'] = round(sum(ratings) / len(ratings), 1)
+    if avg_rating is not None:
+        profile['min_rating'] = round(avg_rating, 1)
 
-    if primary_types:
-        profile['top_cuisine_types'] = [t for t, _ in Counter(primary_types).most_common(3)]
+    if type_counter:
+        profile['top_cuisine_types'] = [t for t, _ in type_counter.most_common(3)]
 
-    if dine_in_vals:
-        profile['prefers_dine_in'] = sum(dine_in_vals) / len(dine_in_vals) >= 0.5
+    dine_in = _weighted_bool(history_objs, input_objs, alpha, lambda r: r.serves_dine_in)
+    if dine_in is not None:
+        profile['prefers_dine_in'] = dine_in
 
-    if takeout_vals:
-        profile['prefers_takeout'] = sum(takeout_vals) / len(takeout_vals) >= 0.5
+    takeout = _weighted_bool(history_objs, input_objs, alpha, lambda r: r.serves_takeout)
+    if takeout is not None:
+        profile['prefers_takeout'] = takeout
 
-    if reservable_vals:
-        profile['prefers_reservable'] = sum(reservable_vals) / len(reservable_vals) >= 0.5
+    reservable = _weighted_bool(history_objs, input_objs, alpha, lambda r: r.reservable)
+    if reservable is not None:
+        profile['prefers_reservable'] = reservable
 
     return profile
 
@@ -184,10 +242,12 @@ def rank_candidates(
     neighborhood: str = None,
     restaurant_types: list = None,
     num_recommendations: int = NUM_RECOMMENDATIONS,
-    liked_restaurant_objs: list = None
+    liked_restaurant_objs: list = None,
+    input_restaurant_objs: list = None,
+    alpha: float = 0.7
 ) -> list:
     """
-    Use GPT-4 to rank real candidate restaurants and return the top num_recommendations.
+    Use Claude to rank real candidate restaurants and return the top num_recommendations.
     Returns a list of dicts with place_id, name, description, reason, address, rating, price_level.
     """
     if not candidates:
@@ -218,11 +278,9 @@ def rank_candidates(
     liked_names_str = ", ".join(liked_names) if liked_names else "none"
     disliked_names_str = ", ".join(disliked_names) if disliked_names else "none"
 
-    # Build liked restaurant profiles for richer "Because you liked" reasoning
-    liked_profiles_section = ""
-    if liked_restaurant_objs:
-        profile_lines = []
-        for r in liked_restaurant_objs:
+    def _format_profile_lines(objs):
+        lines = []
+        for r in (objs or []):
             parts = []
             if r.primary_type:
                 parts.append(r.primary_type)
@@ -237,8 +295,25 @@ def rank_candidates(
             if r.editorial_summary:
                 parts.append(r.editorial_summary)
             meta = ", ".join(parts)
-            profile_lines.append(f"- {r.name}" + (f": {meta}" if meta else ""))
-        liked_profiles_section = "Liked Restaurant Profiles (use these to understand the user's taste — do not recommend them):\n" + "\n".join(profile_lines) + "\n\n"
+            lines.append(f"- {r.name}" + (f": {meta}" if meta else ""))
+        return lines
+
+    session_section = ""
+    if input_restaurant_objs:
+        lines = _format_profile_lines(input_restaurant_objs)
+        session_section = "**Current session (prioritize matching these):**\n" + "\n".join(lines) + "\n\n"
+
+    history_section = ""
+    if liked_restaurant_objs:
+        lines = _format_profile_lines(liked_restaurant_objs)
+        history_section = "**Past preferences (use for broader taste context):**\n" + "\n".join(lines) + "\n\n"
+
+    if alpha >= 0.7:
+        alpha_instruction = "The user's current session inputs should heavily influence your selection.\n\n"
+    elif alpha <= 0.3:
+        alpha_instruction = "Draw primarily from the user's historical taste profile.\n\n"
+    else:
+        alpha_instruction = ""
 
     neighborhood_section = ""
     if neighborhood:
@@ -255,7 +330,9 @@ def rank_candidates(
         top_cuisine_types=", ".join(taste_profile.get('top_cuisine_types', [])) or 'any',
         prefers_dine_in=taste_profile.get('prefers_dine_in', 'unknown'),
         prefers_reservable=taste_profile.get('prefers_reservable', 'unknown'),
-        liked_profiles_section=liked_profiles_section,
+        session_section=session_section,
+        history_section=history_section,
+        alpha_instruction=alpha_instruction,
         liked_names=liked_names_str,
         disliked_names=disliked_names_str,
         neighborhood_section=neighborhood_section,
@@ -274,10 +351,10 @@ def rank_candidates(
 
         content = response.content[0].text
         if not content:
-            logging.warning("Received empty content from GPT-4 rank call.")
+            logging.warning("Received empty content from Claude rank call.")
             return []
 
-        logging.debug(f"GPT-4 rank response:\n{content}")
+        logging.debug(f"Claude rank response:\n{content}")
 
         results = []
         for line in content.strip().split('\n'):
@@ -312,7 +389,7 @@ def rank_candidates(
             # Resolve via candidate_index — no API call needed
             candidate = candidate_index.get(candidate_num)
             if not candidate:
-                logging.warning(f"GPT-4 referenced unknown candidate number {candidate_num}")
+                logging.warning(f"Claude referenced unknown candidate number {candidate_num}")
                 continue
 
             results.append({
@@ -328,7 +405,7 @@ def rank_candidates(
         return results[:num_recommendations]
 
     except Exception as e:
-        logging.error(f"Error with GPT-4 rank call: {e}")
+        logging.error(f"Error with Claude rank call: {e}")
         return []
 
 

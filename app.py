@@ -168,12 +168,6 @@ if ENVIRONMENT == 'production':
         if ENVIRONMENT == 'production':
             raise
 
-# Debug: Check API key in deployment (remove after verification)
-api_key = os.getenv('OPENAI_API_KEY')
-if api_key:
-    logging.info(f"OpenAI API key loaded: {api_key[:15]}...")
-else:
-    logging.error("No OpenAI API key found in environment!")
 
 @app.route('/')
 def index():
@@ -196,10 +190,12 @@ def get_recommendations():
         city = data.get('city')
         neighborhood = data.get('neighborhood', None)
         restaurant_types = data.get('restaurant_types', [])
+        input_weight = float(data.get('input_weight', 0.7))
+        input_weight = max(0.0, min(1.0, input_weight))  # clamp to [0, 1]
         if not city:
             return jsonify({"error": "City is required"}), 400
-        
-        logging.debug(f"Request: user='{user_name}', city='{city}', neighborhood='{neighborhood}', types='{restaurant_types}', place_ids={place_ids}, names={input_restaurant_names}")
+
+        logging.info(f"Request: user='{user_name}', city='{city}', neighborhood='{neighborhood}', types='{restaurant_types}', input_weight={input_weight}, place_ids={place_ids}, names={input_restaurant_names}")
         
         # Get or create user
         user = User.query.filter_by(name=user_name).first()
@@ -280,13 +276,13 @@ def get_recommendations():
             UserRestaurantPreference.preference == PreferenceType.dislike
         ).all()
 
-        # Add current input restaurants to liked context
+        # Merge for exclusion purposes only; keep separate for weighted profile/ranking
         all_liked_objs = liked_restaurant_objs + input_restaurants
         liked_restaurant_names = list({r.name for r in all_liked_objs})
         disliked_restaurant_names = list({r.name for r in disliked_restaurant_objs})
 
-        # Build taste profile from liked ORM objects
-        taste_profile = build_taste_profile(all_liked_objs)
+        # Build weighted taste profile (history vs. session inputs controlled by input_weight)
+        taste_profile = build_taste_profile(liked_restaurant_objs, input_restaurants, input_weight)
 
         # Get candidate pool fresh from Places API on every request
         candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
@@ -349,11 +345,13 @@ def get_recommendations():
         if not candidates:
             return jsonify({"error": "Could not retrieve candidate restaurants at this time."}), 500
 
-        # Rank candidates using Haiku, with liked restaurant profiles as reference
+        # Rank candidates using Haiku, with session inputs and history as separate contexts
         ranked = rank_candidates(
             taste_profile=taste_profile,
             candidates=candidates,
-            liked_restaurant_objs=all_liked_objs,
+            liked_restaurant_objs=liked_restaurant_objs,
+            input_restaurant_objs=input_restaurants,
+            alpha=input_weight,
             liked_names=liked_restaurant_names,
             disliked_names=disliked_restaurant_names,
             city=city,

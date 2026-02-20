@@ -250,6 +250,24 @@ function initForm() {
     const loading = document.getElementById('loading');
     const nameInput = document.getElementById('name');
 
+    // Update slider label on change
+    const slider = document.getElementById('input-weight-slider');
+    const sliderLabel = document.getElementById('input-weight-label');
+    if (slider && sliderLabel) {
+        const updateSliderLabel = () => {
+            const val = parseInt(slider.value);
+            if (val === 50) {
+                sliderLabel.textContent = 'Balanced (50%)';
+            } else if (val < 50) {
+                sliderLabel.textContent = `History (${100 - val}%)`;
+            } else {
+                sliderLabel.textContent = `This Session (${val}%)`;
+            }
+        };
+        slider.addEventListener('input', updateSliderLabel);
+        updateSliderLabel();
+    }
+
     form.addEventListener('submit', function(e) {
         e.preventDefault();
         loading.style.display = 'flex';
@@ -273,11 +291,15 @@ function initForm() {
         const city = document.getElementById('city').value;
         const neighborhood = document.getElementById('neighborhood').value;
         const types = [];
-        
+
         // Toggle types
         document.querySelectorAll('.toggle-input:checked').forEach(cb => {
             types.push(cb.value);
         });
+
+        // Read input weight slider (0-100 → 0.0-1.0)
+        const inputWeightSlider = document.getElementById('input-weight-slider');
+        const inputWeight = inputWeightSlider ? parseInt(inputWeightSlider.value) / 100 : 0.7;
 
         // API Call
         fetch('/get_recommendations', {
@@ -289,7 +311,8 @@ function initForm() {
                 neighborhood: neighborhood,
                 place_ids: placeIds,
                 input_restaurants: inputRestaurants,
-                restaurant_types: [...new Set(types)] // dedupe
+                restaurant_types: [...new Set(types)], // dedupe
+                input_weight: inputWeight
             })
         })
         .then(res => res.json())
