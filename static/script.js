@@ -268,6 +268,24 @@ function initForm() {
         updateSliderLabel();
     }
 
+    // Update revisit weight slider label on change
+    const revisitSlider = document.getElementById('revisit-weight-slider');
+    const revisitLabel = document.getElementById('revisit-weight-label');
+    if (revisitSlider && revisitLabel) {
+        const updateRevisitLabel = () => {
+            const val = parseInt(revisitSlider.value);
+            if (val === 0) {
+                revisitLabel.textContent = 'All New';
+            } else if (val === 100) {
+                revisitLabel.textContent = 'Revisit Picks';
+            } else {
+                revisitLabel.textContent = `Mixed (${val}% revisit)`;
+            }
+        };
+        revisitSlider.addEventListener('input', updateRevisitLabel);
+        updateRevisitLabel();
+    }
+
     form.addEventListener('submit', function(e) {
         e.preventDefault();
         loading.style.display = 'flex';
@@ -301,6 +319,10 @@ function initForm() {
         const inputWeightSlider = document.getElementById('input-weight-slider');
         const inputWeight = inputWeightSlider ? parseInt(inputWeightSlider.value) / 100 : 0.7;
 
+        // Read revisit weight slider (0-100 → 0.0-1.0)
+        const revisitWeightSlider = document.getElementById('revisit-weight-slider');
+        const revisitWeight = revisitWeightSlider ? parseInt(revisitWeightSlider.value) / 100 : 0.0;
+
         // API Call
         fetch('/get_recommendations', {
             method: 'POST',
@@ -312,7 +334,8 @@ function initForm() {
                 place_ids: placeIds,
                 input_restaurants: inputRestaurants,
                 restaurant_types: [...new Set(types)], // dedupe
-                input_weight: inputWeight
+                input_weight: inputWeight,
+                revisit_weight: revisitWeight
             })
         })
         .then(res => res.json())

@@ -174,6 +174,26 @@ def index():
     # Main entry point for the application
     return render_template('index.html')
 
+def _restaurant_to_candidate(r):
+    """Convert a Restaurant ORM object to the candidate dict format used by rank_candidates."""
+    return {
+        "name": r.name,
+        "place_id": r.place_id,
+        "address": r.location,
+        "categories": [r.cuisine_type] if r.cuisine_type else [],
+        "price_level": r.price_level,
+        "rating": r.rating,
+        "user_rating_count": r.user_rating_count,
+        "editorial_summary": r.editorial_summary,
+        "primary_type": r.primary_type,
+        "serves_dine_in": r.serves_dine_in,
+        "serves_takeout": r.serves_takeout,
+        "serves_delivery": r.serves_delivery,
+        "reservable": r.reservable,
+        "_is_revisit": True,
+    }
+
+
 @app.route('/get_recommendations', methods=['POST'])
 def get_recommendations():
     try:
@@ -192,10 +212,12 @@ def get_recommendations():
         restaurant_types = data.get('restaurant_types', [])
         input_weight = float(data.get('input_weight', 0.7))
         input_weight = max(0.0, min(1.0, input_weight))  # clamp to [0, 1]
+        revisit_weight = float(data.get('revisit_weight', 0.0))
+        revisit_weight = max(0.0, min(1.0, revisit_weight))  # clamp to [0, 1]
         if not city:
             return jsonify({"error": "City is required"}), 400
 
-        logging.info(f"Request: user='{user_name}', city='{city}', neighborhood='{neighborhood}', types='{restaurant_types}', input_weight={input_weight}, place_ids={place_ids}, names={input_restaurant_names}")
+        logging.info(f"Request: user='{user_name}', city='{city}', neighborhood='{neighborhood}', types='{restaurant_types}', input_weight={input_weight}, revisit_weight={revisit_weight}, place_ids={place_ids}, names={input_restaurant_names}")
         
         # Get or create user
         user = User.query.filter_by(name=user_name).first()
@@ -284,8 +306,52 @@ def get_recommendations():
         # Build weighted taste profile (history vs. session inputs controlled by input_weight)
         taste_profile = build_taste_profile(liked_restaurant_objs, input_restaurants, input_weight)
 
-        # Get candidate pool fresh from Places API on every request
-        candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
+        # Build revisit candidate pool: previously recommended restaurants for this user+city
+        disliked_ids = {r.id for r in disliked_restaurant_objs}
+        input_place_ids = {r.place_id for r in input_restaurants}
+        prev_recommended = db.session.query(Restaurant).join(RequestRestaurant).join(UserRequest).filter(
+            UserRequest.user_id == user.id,
+            UserRequest.city == city,
+            RequestRestaurant.type == RequestType.recommendation
+        ).all()
+        prev_recommended = [
+            r for r in prev_recommended
+            if r.id not in disliked_ids and r.place_id not in input_place_ids
+        ]
+        logging.info(f"revisit_weight={revisit_weight}, revisit pool: {len(prev_recommended)} restaurants")
+
+        # -----------------------------------------------------------------------
+        # CANDIDATE POOL CONSTRUCTION
+        # β=1.0 and enough revisits → skip Google entirely; β=0 → exclude revisits.
+        # -----------------------------------------------------------------------
+
+        USE_ONLY_REVISITS = revisit_weight >= 1.0 and len(prev_recommended) >= 3
+
+        if USE_ONLY_REVISITS:
+            logging.info("Skipping Google search — using revisit pool")
+            candidates = [_restaurant_to_candidate(r) for r in prev_recommended]
+        else:
+            if revisit_weight >= 1.0:
+                logging.info("Revisit pool too small, falling back to Google")
+
+            # Build exclusion set: liked + inputs + disliked, plus prev_recommended when β=0
+            excluded_place_ids = {r.place_id for r in all_liked_objs + disliked_restaurant_objs}
+            if revisit_weight == 0.0:
+                excluded_place_ids |= {r.place_id for r in prev_recommended}
+
+            candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
+
+            # Inject revisit candidates for mixed mode (β > 0 and β < 1)
+            if revisit_weight > 0.0 and prev_recommended:
+                n_revisit = round(revisit_weight * min(len(prev_recommended), 10))
+                revisit_by_rating = sorted(prev_recommended, key=lambda r: r.rating or 0, reverse=True)
+                new_place_ids = {c['place_id'] for c in candidates}
+                revisit_to_inject = [
+                    _restaurant_to_candidate(r) for r in revisit_by_rating
+                    if r.place_id not in new_place_ids
+                ][:n_revisit]
+                candidates = candidates + revisit_to_inject
+                logging.info(f"Injected {len(revisit_to_inject)} revisit candidates into pool")
 
         # -----------------------------------------------------------------------
         # CANDIDATE PRE-FILTERING
@@ -294,19 +360,20 @@ def get_recommendations():
         # it is skipped to avoid empty results.
         # -----------------------------------------------------------------------
 
-        # 1. Exclude non-restaurants (hotels, lodging)
-        LODGING_TYPES = {
-            "hotel", "motel", "lodging", "extended_stay_hotel", "resort_hotel",
-            "bed_and_breakfast", "hostel", "inn", "vacation_rental"
-        }
-        candidates = [
-            c for c in candidates
-            if (c.get("primary_type") or "").lower() not in LODGING_TYPES
-        ]
+        # 1. Exclude non-restaurants (hotels, lodging) — skip for revisit-only pool
+        if not USE_ONLY_REVISITS:
+            LODGING_TYPES = {
+                "hotel", "motel", "lodging", "extended_stay_hotel", "resort_hotel",
+                "bed_and_breakfast", "hostel", "inn", "vacation_rental"
+            }
+            candidates = [
+                c for c in candidates
+                if (c.get("primary_type") or "").lower() not in LODGING_TYPES
+            ]
 
         # 2. Exclude places the user has already interacted with (liked, disliked, input)
-        excluded_place_ids = {r.place_id for r in all_liked_objs + disliked_restaurant_objs}
-        candidates = [c for c in candidates if c.get("place_id") not in excluded_place_ids]
+        if not USE_ONLY_REVISITS:
+            candidates = [c for c in candidates if c.get("place_id") not in excluded_place_ids]
 
         # 3. Minimum rating floor — exclude places rated below 3.5
         RATING_FLOOR = 3.5
@@ -356,7 +423,8 @@ def get_recommendations():
             disliked_names=disliked_restaurant_names,
             city=city,
             neighborhood=neighborhood,
-            restaurant_types=restaurant_types
+            restaurant_types=restaurant_types,
+            revisit_weight=revisit_weight
         )
 
         if not ranked:

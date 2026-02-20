@@ -131,6 +131,21 @@
                             </div>
                         </div>
 
+                        <!-- Revisit vs. New Slider -->
+                        <div class="form-section" style="margin-bottom: 1rem;">
+                            <div class="field-header" style="margin-bottom: 0.5rem;">
+                                <i class="bi bi-arrow-counterclockwise field-icon"></i>
+                                <span class="field-label">Show me</span>
+                            </div>
+                            <input type="range" id="revisit-weight-slider" min="0" max="100" step="25" value="0"
+                                style="width: 100%; accent-color: var(--accent-orange);">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                <span>All New</span>
+                                <span id="revisit-weight-label">All New</span>
+                                <span>Revisit</span>
+                            </div>
+                        </div>
+
                         <!-- CTA Button -->
                         <button type="submit" class="cta-button" id="submit-btn">
                             <span class="cta-text">Get Recommendations</span>

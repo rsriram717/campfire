@@ -7,7 +7,7 @@ User Taste Profile:
 - Prefers dine-in: {prefers_dine_in}
 - Prefers reservable: {prefers_reservable}
 
-{session_section}{history_section}{alpha_instruction}Already liked (do not recommend): {liked_names}
+{session_section}{history_section}{alpha_instruction}{revisit_instruction}Already liked (do not recommend): {liked_names}
 Disliked (avoid similar): {disliked_names}
 {neighborhood_section}{type_section}
 Candidates (only choose from this list):

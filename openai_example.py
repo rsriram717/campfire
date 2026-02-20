@@ -244,7 +244,8 @@ def rank_candidates(
     num_recommendations: int = NUM_RECOMMENDATIONS,
     liked_restaurant_objs: list = None,
     input_restaurant_objs: list = None,
-    alpha: float = 0.7
+    alpha: float = 0.7,
+    revisit_weight: float = 0.0
 ) -> list:
     """
     Use Claude to rank real candidate restaurants and return the top num_recommendations.
@@ -271,7 +272,9 @@ def rank_candidates(
         if c.get('editorial_summary'):
             parts.append(c['editorial_summary'])
         meta = ", ".join(parts)
-        line = f"{i}. {c['name']}" + (f" — {meta}" if meta else "")
+        is_revisit = c.get('_is_revisit', False)
+        revisit_tag = " [previously recommended]" if is_revisit else ""
+        line = f"{i}. {c['name']}{revisit_tag}" + (f" — {meta}" if meta else "")
         candidate_lines.append(line)
 
     candidates_numbered = "\n".join(candidate_lines)
@@ -315,6 +318,13 @@ def rank_candidates(
     else:
         alpha_instruction = ""
 
+    if revisit_weight >= 0.7:
+        revisit_instruction = "Some candidates are marked [previously recommended] — it is fine to re-recommend them; the user wants to revisit great picks.\n\n"
+    elif revisit_weight == 0.0:
+        revisit_instruction = "Prefer candidates the user has not seen before.\n\n"
+    else:
+        revisit_instruction = ""
+
     neighborhood_section = ""
     if neighborhood:
         neighborhood_section = f"Neighborhood preference: {neighborhood}\n"
@@ -333,6 +343,7 @@ def rank_candidates(
         session_section=session_section,
         history_section=history_section,
         alpha_instruction=alpha_instruction,
+        revisit_instruction=revisit_instruction,
         liked_names=liked_names_str,
         disliked_names=disliked_names_str,
         neighborhood_section=neighborhood_section,

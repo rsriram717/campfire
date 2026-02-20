@@ -1,25 +1,26 @@
 # Campfire - Project Context
 
 ## What It Is
-AI-powered restaurant recommendation web app. Users input favorite restaurants → GPT-4 suggests 3 new ones based on liked/disliked history, city, neighborhood, and type filters.
+AI-powered restaurant recommendation web app. Users input favorite restaurants → Claude Haiku ranks real Google Places candidates and returns 3 personalized picks, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.
 
 ## Stack
 - **Backend**: Flask (Python 3.9), SQLAlchemy ORM, Flask-Migrate/Alembic
 - **DB**: SQLite (dev) / PostgreSQL via Supabase (prod), env-selected via `FLASK_ENV`
-- **AI**: OpenAI GPT-4 via `openai_example.py` + `prompt.txt` template
+- **AI**: Claude Haiku (`claude-haiku-4-5-20251001`) via `openai_example.py` + `prompt_rank.txt` for ranking; legacy GPT-4 path preserved in `prompt.txt` but unused by main flow
 - **Places**: Google Places or Yelp Fusion (configured via `PLACES_PROVIDER` env var), abstracted in `services/`
 - **Frontend**: Vanilla JS + Bootstrap 4, no build step — just `static/script.js` and `static/styles.css`
 - **Deployment**: Vercel (`vercel.json`), instance path set to `/tmp/instance` for writable FS
 
 ## Key Files
-- `app.py` — all Flask routes and DB logic
+- `app.py` — all Flask routes, DB logic, `_restaurant_to_candidate()` helper
 - `models.py` — SQLAlchemy models
-- `openai_example.py` — GPT-4 call + response parsing
-- `prompt.txt` — GPT-4 prompt template (uses `.format()` placeholders)
+- `openai_example.py` — `build_taste_profile`, `rank_candidates` (Claude Haiku), legacy `get_similar_restaurants` (GPT-4)
+- `prompt_rank.txt` — Claude Haiku ranking prompt (active)
+- `prompt.txt` — legacy GPT-4 prompt template (inactive/preserved)
 - `services/` — Google/Yelp Places abstraction (`places_service` imported in app.py)
 - `utils.py` — `generate_slug(name, city)`
 - `templates/index.html` — single-page UI with tab panels
-- `static/script.js` — tab switching, autocomplete, form submission, preference UI
+- `static/script.js` — tab switching, autocomplete, form submission, preference UI, slider logic
 - `features/todo.md` — tracked bugs and open improvements
 
 ## DB Models
@@ -31,20 +32,26 @@ AI-powered restaurant recommendation web app. Users input favorite restaurants �
 - `FeedbackSuggestion` + `FeedbackVote` — community feedback leaderboard with upvote/downvote
 
 ## Recommendation Flow
-1. User submits place_ids (from autocomplete) + city/neighborhood/types
-2. `app.py` fetches/creates `Restaurant` records from Places API
+1. User submits `place_ids` + `city`/`neighborhood`/`types` + `input_weight` + `revisit_weight`
+2. `app.py` fetches/creates `Restaurant` records for each input place_id via Places API
 3. Pulls user's liked/disliked history from `UserRestaurantPreference`
-4. Calls `get_similar_restaurants()` → GPT-4 returns: `Name - Because you liked X and Y - Description`
-5. Each recommendation is resolved back to a canonical Google Place (autocomplete → get_details)
-6. Falls back to `provider='campfire_ai'` if resolution fails
-7. All results saved as `RequestRestaurant` with type=`recommendation`
+4. Queries `prev_recommended` pool: prior `RequestRestaurant(type=recommendation)` for this user+city, excluding disliked
+5. **Candidate pool construction** (controlled by `revisit_weight` β):
+   - β=0.0: Google `searchNearby` for 20 candidates; prev_recommended added to exclusion set
+   - β=0.5: Google search + top-rated revisit candidates injected into pool
+   - β=1.0 (≥3 revisits available): skip Google entirely; use revisit pool only
+   - β=1.0 (< 3 revisits): fall back to Google silently
+6. Pre-filter candidates: remove lodging, low-rated (<3.5), already-seen, type mismatches
+7. Build weighted taste profile via `build_taste_profile()` (controlled by `input_weight` α)
+8. Call `rank_candidates()` → Claude Haiku reads `prompt_rank.txt`, picks top 3 by number from candidate list
+9. All ranked results saved as `RequestRestaurant(type=recommendation)` — no additional API resolution needed
 
-## GPT-4 Prompt Format
-Output format: `Restaurant Name - Because you liked [Source 1] and [Source 2] - Description`
-- Two specific liked restaurant names required as sources
-- If no connection: `Name - - Description`
-- 10-15 word description
-- `max_tokens=150` — keep in mind this is tight for 3 recommendations
+## Prompt Format (`prompt_rank.txt`)
+Output format: `N. Restaurant Name - Because you liked [Liked 1] and [Liked 2] - 10-15 word description`
+- Claude picks by candidate number; `rank_candidates()` resolves name/place_id from `candidate_index`
+- Revisit candidates tagged `[previously recommended]` in the numbered list
+- `{revisit_instruction}` adjusts guidance based on β (≥0.7: revisits OK, =0: prefer new, else: empty)
+- `max_tokens=300`
 
 ## Frontend Notes
 - Username persisted in `localStorage` under key `campfire_username`
@@ -52,6 +59,8 @@ Output format: `Restaurant Name - Because you liked [Source 1] and [Source 2] - 
 - Restaurant types: Casual, Fine Dining, Bar
 - Uses Awesomplete for autocomplete
 - Session tokens generated per autocomplete session for Google billing optimization
+- **History/Session slider** (`input-weight-slider`): 0–100, step 10, default 70 → sent as `input_weight` (0.0–1.0)
+- **Revisit slider** (`revisit-weight-slider`): 0–100, step 25, default 0 → sent as `revisit_weight` (0.0–1.0); labels: "All New" / "Mixed (X% revisit)" / "Revisit Picks"
 
 ## Known Open Issues (features/todo.md)
 - Restaurant names appear lowercase in preferences tab (sanitize_name strips formatting)

@@ -7,11 +7,11 @@ Campfire is an intelligent restaurant recommendation system that leverages OpenA
 ## 🌟 Features
 
 ### Core Functionality
-- **AI-Powered Recommendations**: Uses OpenAI's GPT-4 to generate intelligent restaurant suggestions
+- **AI-Powered Recommendations**: Uses Claude Haiku to rank real Google Places candidates against your taste profile
 - **Preference Learning**: Tracks and learns from your restaurant likes and dislikes over time
 - **City-Specific Suggestions**: Currently supports Chicago and New York with localized recommendations
 - **Neighborhood Filtering**: Optionally narrow recommendations to specific neighborhoods
-- **Restaurant Type Filtering**: Filter by casual, sit-down, or bar styles
+- **Restaurant Type Filtering**: Filter by Casual, Fine Dining, or Bar styles
 - **Places Autocomplete**: Google/Yelp API integration for restaurant search
 - **User Profile Management**: Maintains individual user profiles with preference history
 - **Interactive Web Interface**: Clean, responsive Bootstrap-based UI with tabbed navigation
@@ -19,6 +19,8 @@ Campfire is an intelligent restaurant recommendation system that leverages OpenA
 ### Key Capabilities
 - **Restaurant Input**: Enter up to 5 favorite restaurants to seed recommendations
 - **Preference Tracking**: Like/dislike system that improves future recommendations
+- **History vs. Session Weighting**: Slider controls how much current inputs vs. past history shape recommendations
+- **Revisit Mode**: Slider to surface previously recommended restaurants instead of always finding new ones
 - **Request History**: Maintains a history of all recommendation requests and responses
 - **Smart Filtering**: Avoids recommending restaurants similar to ones you've disliked
 - **Database Persistence**: All user data, preferences, and restaurant information stored locally
@@ -40,11 +42,14 @@ A detailed breakdown of the database schema, including an Entity-Relationship Di
 
 ### AI Recommendation Engine
 The recommendation system works by:
-1. Collecting user's liked and disliked restaurants
-2. Formatting preferences into a structured prompt
-3. Sending context to GPT-4 with city-specific instructions
-4. Parsing AI responses to extract restaurant names and descriptions
-5. Storing recommendations in the database for future reference
+1. Collecting user's liked/disliked history and current session inputs
+2. Fetching up to 20 real candidate restaurants from Google Places (`searchNearby`)
+3. Pre-filtering candidates (exclude lodging, low-rated, already-seen, type mismatches)
+4. Optionally injecting previously recommended restaurants based on `revisit_weight`
+5. Building a weighted taste profile from history and session inputs (controlled by `input_weight`)
+6. Sending the numbered candidate list to Claude Haiku (`prompt_rank.txt`) to pick and explain the top 3
+7. Returning ranked results by candidate number — no additional API resolution needed
+8. Storing recommendations in the database as `RequestRestaurant` records
 
 ## 🚀 Setup & Installation
 
@@ -113,8 +118,11 @@ The application will be available at `http://localhost:3001` (or your configured
 2. **Enter your name** - This creates/identifies your user profile
 3. **Add favorite restaurants** - Enter 1-5 restaurants you enjoy (autocomplete helps find them)
 4. **Select your city** - Choose between Chicago or New York
-5. **Optionally filter** - Select neighborhood and/or restaurant types (casual, sit-down, bar)
-6. **Click "Get Recommendations"** - The AI will generate 3 personalized suggestions
+5. **Optionally filter** - Select neighborhood and/or restaurant types (Casual, Fine Dining, Bar)
+6. **Adjust sliders** (optional):
+   - *Base recommendations on*: balance between your history and this session's inputs
+   - *Show me*: "All New" for fresh picks, "Revisit" to surface past recommendations, or Mixed
+7. **Click "Get Recommendations"** - The AI will select 3 personalized suggestions from real nearby places
 
 ### Managing Preferences
 
@@ -153,7 +161,9 @@ Each recommendation includes:
   "input_restaurants": ["The Purple Pig", "Girl & Goat"],
   "city": "Chicago",
   "neighborhood": "West Loop",
-  "restaurant_types": ["sit-down", "casual"]
+  "restaurant_types": ["Casual", "Fine Dining"],
+  "input_weight": 0.7,
+  "revisit_weight": 0.0
 }
 ```
 
@@ -181,24 +191,29 @@ Each recommendation includes:
 
 ```
 campfire/
-├── app.py                 # Main Flask application
+├── app.py                 # Main Flask application + _restaurant_to_candidate helper
 ├── models.py              # SQLAlchemy database models
-├── openai_example.py      # AI recommendation engine
-├── prompt.txt             # GPT-4 prompt template
+├── openai_example.py      # AI ranking engine (build_taste_profile, rank_candidates)
+├── prompt.txt             # Legacy GPT-4 prompt template (unused by main flow)
+├── prompt_rank.txt        # Claude Haiku ranking prompt template
 ├── utils.py               # Utility functions (slug generation)
 ├── requirements.txt       # Python dependencies
 ├── vercel.json            # Vercel deployment config
 ├── .env                   # Environment variables (create from .env.example)
 ├── services/              # External API integrations
 │   ├── __init__.py        # Service factory (Google/Yelp)
-│   ├── google_service.py  # Google Places API
-│   ├── yelp_service.py    # Yelp Fusion API
+│   ├── google_service.py  # Google Places API (searchNearby, get_details, autocomplete)
+│   ├── yelp_service.py    # Yelp Fusion API (stub — search_nearby_candidates returns [])
 │   └── places.py          # Abstract places interface
 ├── templates/
 │   └── index.html         # Main web interface
 ├── static/
 │   ├── styles.css         # Custom styling
 │   └── script.js          # Frontend JavaScript
+├── features/              # Feature specs and bug tracker
+│   ├── todo.md            # Open bugs and improvements
+│   ├── filters_type_and_location.md
+│   └── username_input.md
 ├── docs/                  # Documentation
 │   └── database.md        # Database schema docs
 ├── migrations/            # Alembic database migrations
@@ -235,9 +250,11 @@ All configuration is managed through environment variables defined in your `.env
 - **Environment Selection**: Controlled by `FLASK_ENV` variable
 
 ### AI Model Configuration
-- **Current Model**: `gpt-4`
-- **Token Limit**: 150 tokens per recommendation request
-- **Customization**: Modify `openai_example.py` to adjust model parameters
+- **Ranking Model**: Claude Haiku (`claude-haiku-4-5-20251001`) via Anthropic API — ranks real candidates
+- **Legacy Model**: GPT-4 (`gpt-4`) — used by `get_similar_restaurants()` (not in main flow)
+- **Ranking Token Limit**: 300 tokens per ranking request
+- **Prompt Template**: `prompt_rank.txt` — modify to adjust ranking instructions
+- **Customization**: `RANK_MODEL` constant in `openai_example.py` controls the ranking model
 
 ## 🧪 Development
 
