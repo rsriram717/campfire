@@ -5,15 +5,12 @@ from unittest.mock import MagicMock
 from openai_example import build_taste_profile
 
 
-def _r(price=None, rating=None, primary_type=None, dine_in=None, reservable=None, takeout=None):
+def _r(price=None, rating=None, primary_type=None):
     """Build a minimal Restaurant-like mock object."""
     m = MagicMock()
     m.price_level = price
     m.rating = rating
     m.primary_type = primary_type
-    m.serves_dine_in = dine_in
-    m.serves_takeout = takeout
-    m.reservable = reservable
     return m
 
 
@@ -67,14 +64,16 @@ class TestBuildTasteProfile:
         assert len(profile["top_cuisine_types"]) <= 3
         assert profile["top_cuisine_types"][0] == "italian_restaurant"
 
-    def test_dine_in_preference_captured(self):
-        r = _r(dine_in=True)
-        profile = build_taste_profile([], [r], alpha=1.0)
-        assert profile.get("prefers_dine_in") is True
-
     def test_missing_fields_not_included(self):
         r = _r()  # all None
         profile = build_taste_profile([], [r], alpha=1.0)
         assert "preferred_price_level" not in profile
         assert "min_rating" not in profile
         assert "top_cuisine_types" not in profile
+
+    def test_no_dine_in_or_reservable_in_profile(self):
+        r = _r(price="PRICE_LEVEL_MODERATE", rating=4.5, primary_type="restaurant")
+        profile = build_taste_profile([], [r], alpha=1.0)
+        assert "prefers_dine_in" not in profile
+        assert "prefers_takeout" not in profile
+        assert "prefers_reservable" not in profile

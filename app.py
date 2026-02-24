@@ -419,15 +419,12 @@ def get_recommendations():
             type_filtered = [c for c in candidates if matches_type(c)]
             candidates = type_filtered if len(type_filtered) >= 3 else candidates
 
-        # 5. Sort by rating descending so highest-quality candidates appear first in the prompt
-        candidates.sort(key=lambda c: c.get("rating") or 0, reverse=True)
-
         logging.info(f"Candidate pool after filtering: {len(candidates)} restaurants")
 
         if not candidates:
             return jsonify({"error": "Could not retrieve candidate restaurants at this time."}), 500
 
-        # Rank candidates using Haiku, with session inputs and history as separate contexts
+        # Score, select, and explain candidates using two-stage pipeline + Haiku
         ranked = rank_candidates(
             taste_profile=taste_profile,
             candidates=candidates,
@@ -439,7 +436,8 @@ def get_recommendations():
             city=city,
             neighborhood=neighborhood,
             restaurant_types=restaurant_types,
-            revisit_weight=revisit_weight
+            revisit_weight=revisit_weight,
+            disliked_restaurant_objs=disliked_restaurant_objs,
         )
 
         if not ranked:

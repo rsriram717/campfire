@@ -186,7 +186,8 @@ def run_scenario(scenario, tag, use_llm, n_runs=3):
     if HAS_NEW_PIPELINE:
         try:
             scored = score_candidates(candidates, taste_profile, disliked_objs)
-            new_picks = mmr_select(scored, n=3)
+            n_top = max(5, round(len(scored) * 0.30))
+            new_picks = mmr_select(scored[:n_top], n=3)
             print("\nNEW (score+MMR):")
             for i, c in enumerate(new_picks, 1):
                 print(f"  {i}. {c['name']} ({c.get('primary_type','?')}, ★{c.get('rating','?')}, score={c.get('_score', 0):.3f})")
