@@ -356,7 +356,7 @@ def rank_candidates(
         client = get_anthropic_client()
         response = client.messages.create(
             model=RANK_MODEL,
-            max_tokens=300,
+            max_tokens=500,
             messages=[{"role": "user", "content": prompt}]
         )
 

@@ -40,7 +40,7 @@ class PlacesService(ABC):
     def search_nearby_candidates(
         self, city: str, neighborhood: Optional[str] = None,
         restaurant_types: Optional[List] = None, radius: int = 8000,
-        max_results: int = 20
+        max_results: int = 20, included_types: Optional[List[str]] = None
     ) -> List[dict]:
         """
         Return up to max_results real restaurant candidates near city.

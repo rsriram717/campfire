@@ -340,7 +340,21 @@ def get_recommendations():
             if revisit_weight == 0.0:
                 excluded_place_ids |= {r.place_id for r in prev_recommended}
 
-            candidates = places_service.search_nearby_candidates(city, neighborhood, restaurant_types)
+            # Extract specific cuisine types to bias the candidate search.
+            # Apply when input_weight > 0.3 — covers most of the slider range.
+            # Only skip when deeply history-focused (input_weight <= 0.3).
+            GENERIC_PLACE_TYPES = {"restaurant", "food", "point_of_interest", "establishment", "meal_delivery", "meal_takeaway"}
+            cuisine_types_for_search = None
+            if input_weight > 0.3:
+                cuisine_types_for_search = [
+                    t for t in taste_profile.get('top_cuisine_types', [])
+                    if t not in GENERIC_PLACE_TYPES
+                ] or None
+
+            candidates = places_service.search_nearby_candidates(
+                city, neighborhood, restaurant_types,
+                included_types=cuisine_types_for_search
+            )
 
             # Inject revisit candidates for mixed mode (β > 0 and β < 1)
             if revisit_weight > 0.0 and prev_recommended:

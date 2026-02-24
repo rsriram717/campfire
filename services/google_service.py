@@ -186,7 +186,8 @@ class GooglePlacesService(PlacesService):
         neighborhood: Optional[str] = None,
         restaurant_types: Optional[List] = None,
         radius: int = 8000,
-        max_results: int = 20
+        max_results: int = 20,
+        included_types: Optional[List[str]] = None
     ) -> List[Dict]:
         if not self.api_key:
             logging.error("GOOGLE_API_KEY is not set.")
@@ -216,13 +217,17 @@ class GooglePlacesService(PlacesService):
         # Map frontend type selections to Google Place types for Bar searches.
         # Fine Dining and Casual stay broad ("restaurant") and are filtered post-fetch
         # using price_level, since Google's fine_dining_restaurant type is inconsistent.
+        # If the caller provides specific cuisine types (included_types), use those instead
+        # of the broad "restaurant" fallback — but Bar always wins.
         if restaurant_types and "Bar" in restaurant_types and len(restaurant_types) == 1:
-            included_types = ["bar", "cocktail_bar", "wine_bar", "pub"]
+            final_included_types = ["bar", "cocktail_bar", "wine_bar", "pub"]
+        elif included_types:
+            final_included_types = included_types
         else:
-            included_types = ["restaurant"]
+            final_included_types = ["restaurant"]
 
         body = {
-            "includedTypes": included_types,
+            "includedTypes": final_included_types,
             "maxResultCount": max_results,
             "locationRestriction": {
                 "circle": {
