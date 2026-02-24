@@ -6,7 +6,7 @@ Every non-trivial change follows this lifecycle. Do not skip steps.
 
 1. **Design** — Write a plan to `features/<feature-name>.md` covering what, why, and how. Call out open questions.
 2. **Implement** — Build against the plan. Keep commits focused.
-3. **Test** — Add or update tests in `tests/`. All 39+ tests must pass (`venv/bin/python -m pytest`). The pre-push hook enforces this automatically.
+3. **Test** — Add or update tests in `tests/`. All 78+ tests must pass (`venv/bin/python -m pytest`). The pre-push hook enforces this automatically.
 4. **Document** — Update `README.md`, `CLAUDE.md`, and `memory/MEMORY.md` to reflect the change.
 5. **Clean up** — Delete `features/<feature-name>.md` (the commit history is the permanent record). Remove any dead code, stale files, or temporary scaffolding.
 6. **Push** — `git push` triggers the pre-push hook which runs the full test suite. Push only when green.
@@ -14,7 +14,7 @@ Every non-trivial change follows this lifecycle. Do not skip steps.
 For trivial fixes (typos, one-line bugs), steps 1 and 5 can be skipped.
 
 ## What It Is
-AI-powered restaurant recommendation web app. Users input favorite restaurants → Claude Haiku ranks real Google Places candidates and returns 3 personalized picks, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.
+AI-powered restaurant recommendation web app. Users input favorite restaurants → a two-stage pipeline (deterministic scoring + MMR selection) picks 3 candidates, then Claude Haiku writes personalized explanations, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.
 
 ## Stack
 - **Backend**: Flask (Python 3.9), SQLAlchemy ORM, Flask-Migrate/Alembic
@@ -27,7 +27,7 @@ AI-powered restaurant recommendation web app. Users input favorite restaurants �
 ## Key Files
 - `app.py` — all Flask routes, DB logic, `_restaurant_to_candidate()` helper
 - `models.py` — SQLAlchemy models
-- `openai_example.py` — `build_taste_profile`, `rank_candidates` (Claude Haiku), legacy `get_similar_restaurants` (GPT-4)
+- `openai_example.py` — `build_taste_profile`, `score_candidates`, `mmr_select`, `rank_candidates` (Claude Haiku), legacy `get_similar_restaurants` (GPT-4)
 - `prompt_rank.txt` — Claude Haiku ranking prompt (active)
 - `prompt.txt` — legacy GPT-4 prompt template (inactive/preserved)
 - `services/` — Google/Yelp Places abstraction (`places_service` imported in app.py)
@@ -56,15 +56,18 @@ AI-powered restaurant recommendation web app. Users input favorite restaurants �
    - β=1.0 (< 3 revisits): fall back to Google silently
 6. Pre-filter candidates: remove lodging, low-rated (<3.5), already-seen, type mismatches
 7. Build weighted taste profile via `build_taste_profile()` (controlled by `input_weight` α)
-8. Call `rank_candidates()` → Claude Haiku reads `prompt_rank.txt`, picks top 3 by number from candidate list
-9. All ranked results saved as `RequestRestaurant(type=recommendation)` — no additional API resolution needed
+8. **Two-stage selection:**
+   - `score_candidates()`: scores each candidate (W_CUISINE=0.40, W_PRICE=0.30, W_RATING=0.25); soft dislike penalty 0.10/type capped at 0.30; returns sorted list
+   - `mmr_select()`: takes top 30% (min 5) scored candidates, applies MMR with (primary_type, price_level) similarity (λ=0.7) to pick 3 diverse picks
+9. Claude Haiku reads `prompt_rank.txt` and writes explanations for the pre-selected 3
+10. All ranked results saved as `RequestRestaurant(type=recommendation)` — no additional API resolution needed
 
 ## Prompt Format (`prompt_rank.txt`)
 Output format: `N. Restaurant Name - Because you liked [Liked 1] and [Liked 2] - 10-15 word description`
-- Claude picks by candidate number; `rank_candidates()` resolves name/place_id from `candidate_index`
+- Haiku explains only (selection already done deterministically); resolves by candidate number from `candidate_index`
 - Revisit candidates tagged `[previously recommended]` in the numbered list
-- `{revisit_instruction}` adjusts guidance based on β (≥0.7: revisits OK, =0: prefer new, else: empty)
-- `max_tokens=300`
+- `{revisit_instruction}` adjusts explanation guidance based on β (≥0.7: revisits OK, =0: prefer new, else: empty)
+- `max_tokens=500`
 
 ## Frontend Notes
 - Username persisted in `localStorage` under key `campfire_username`
