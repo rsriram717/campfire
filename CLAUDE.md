@@ -1,8 +1,17 @@
 # Campfire - Project Context
 
-## Development Guidelines
-- **Documentation**: Every new feature must include updates to `README.md`, `CLAUDE.md`, and `memory/MEMORY.md` before committing.
-- **Feature planning**: Before implementing any non-trivial feature, write a plan to `features/<feature-name>.md`. Implement against that plan. Delete the file when the feature ships — the commit history is the permanent record.
+## Development Workflow
+
+Every non-trivial change follows this lifecycle. Do not skip steps.
+
+1. **Design** — Write a plan to `features/<feature-name>.md` covering what, why, and how. Call out open questions.
+2. **Implement** — Build against the plan. Keep commits focused.
+3. **Test** — Add or update tests in `tests/`. All 39+ tests must pass (`venv/bin/python -m pytest`). The pre-push hook enforces this automatically.
+4. **Document** — Update `README.md`, `CLAUDE.md`, and `memory/MEMORY.md` to reflect the change.
+5. **Clean up** — Delete `features/<feature-name>.md` (the commit history is the permanent record). Remove any dead code, stale files, or temporary scaffolding.
+6. **Push** — `git push` triggers the pre-push hook which runs the full test suite. Push only when green.
+
+For trivial fixes (typos, one-line bugs), steps 1 and 5 can be skipped.
 
 ## What It Is
 AI-powered restaurant recommendation web app. Users input favorite restaurants → Claude Haiku ranks real Google Places candidates and returns 3 personalized picks, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.

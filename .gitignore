@@ -24,6 +24,7 @@ instance/
 
 # Pytest
 .cache
+.pytest_cache/
 
 # Migrations
 #migrations/  # Uncomment this line if you decide to exclude migrations
@@ -54,5 +55,12 @@ Thumbs.db
 # Logs
 *.log
 
+# Vercel
+.vercel/
+
+# Node (screenshot tooling)
+node_modules/
+
 # Other
 scratch.py
+screenshot.js
