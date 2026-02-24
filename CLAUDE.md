@@ -6,7 +6,7 @@ Every non-trivial change follows this lifecycle. Do not skip steps.
 
 1. **Design** — Write a plan to `features/<feature-name>.md` covering what, why, and how. Call out open questions.
 2. **Implement** — Build against the plan. Keep commits focused.
-3. **Test** — Add or update tests in `tests/`. All 39+ tests must pass (`venv/bin/python -m pytest`). The pre-push hook enforces this automatically.
+3. **Test** — Add or update tests in `tests/`. All 78+ tests must pass (`venv/bin/python -m pytest`). The pre-push hook enforces this automatically.
 4. **Document** — Update `README.md`, `CLAUDE.md`, and `memory/MEMORY.md` to reflect the change.
 5. **Clean up** — Delete `features/<feature-name>.md` (the commit history is the permanent record). Remove any dead code, stale files, or temporary scaffolding.
 6. **Push** — `git push` triggers the pre-push hook which runs the full test suite. Push only when green.
@@ -14,12 +14,12 @@ Every non-trivial change follows this lifecycle. Do not skip steps.
 For trivial fixes (typos, one-line bugs), steps 1 and 5 can be skipped.
 
 ## What It Is
-AI-powered restaurant recommendation web app. Users input favorite restaurants → Claude Haiku ranks real Google Places candidates and returns 3 personalized picks, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.
+AI-powered restaurant recommendation web app. Users input favorite restaurants → a two-stage pipeline (deterministic scoring + MMR selection) picks 3 candidates, then Claude Haiku writes personalized explanations, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.
 
 ## Stack
 - **Backend**: Flask (Python 3.9), SQLAlchemy ORM, Flask-Migrate/Alembic
 - **DB**: SQLite (dev) / PostgreSQL via Supabase (prod), env-selected via `FLASK_ENV`
-- **AI**: Claude Haiku (`claude-haiku-4-5-20251001`) via `openai_example.py` + `prompt_rank.txt` for ranking; legacy GPT-4 path preserved in `prompt.txt` but unused by main flow
+- **AI**: Claude Haiku (`claude-haiku-4-5-20251001`) via `openai_example.py` + `prompt_rank.txt` for personalized explanation of pre-selected candidates; legacy GPT-4 path preserved in `prompt.txt` but unused by main flow
 - **Places**: Google Places or Yelp Fusion (configured via `PLACES_PROVIDER` env var), abstracted in `services/`
 - **Frontend**: Vanilla JS + Bootstrap 4, no build step — just `static/script.js` and `static/styles.css`
 - **Deployment**: Vercel (`vercel.json`), instance path set to `/tmp/instance` for writable FS
@@ -27,14 +27,16 @@ AI-powered restaurant recommendation web app. Users input favorite restaurants �
 ## Key Files
 - `app.py` — all Flask routes, DB logic, `_restaurant_to_candidate()` helper
 - `models.py` — SQLAlchemy models
-- `openai_example.py` — `build_taste_profile`, `rank_candidates` (Claude Haiku), legacy `get_similar_restaurants` (GPT-4)
-- `prompt_rank.txt` — Claude Haiku ranking prompt (active)
+- `openai_example.py` — `build_taste_profile`, `score_candidates`, `mmr_select`, `rank_candidates` (Claude Haiku), legacy `get_similar_restaurants` (GPT-4)
+- `prompt_rank.txt` — Claude Haiku explanation prompt (active); Haiku writes personalized descriptions for pre-selected candidates
 - `prompt.txt` — legacy GPT-4 prompt template (inactive/preserved)
 - `services/` — Google/Yelp Places abstraction (`places_service` imported in app.py)
 - `utils.py` — `generate_slug(name, city)`
 - `templates/index.html` — single-page UI with tab panels
 - `static/script.js` — tab switching, autocomplete, form submission, preference UI, slider logic
 - `features/todo.md` — tracked bugs and open improvements
+- `docs/recommendation-flow.md` — full algorithm detail: scoring, MMR, prompt, schema
+- `CHANGELOG.md` — version history
 
 ## DB Models
 - `User` — name (unique), email
@@ -45,26 +47,23 @@ AI-powered restaurant recommendation web app. Users input favorite restaurants �
 - `FeedbackSuggestion` + `FeedbackVote` — community feedback leaderboard with upvote/downvote
 
 ## Recommendation Flow
-1. User submits `place_ids` + `city`/`neighborhood`/`types` + `input_weight` + `revisit_weight`
-2. `app.py` fetches/creates `Restaurant` records for each input place_id via Places API
-3. Pulls user's liked/disliked history from `UserRestaurantPreference`
-4. Queries `prev_recommended` pool: prior `RequestRestaurant(type=recommendation)` for this user+city, excluding disliked
-5. **Candidate pool construction** (controlled by `revisit_weight` β):
-   - β=0.0: Google `searchNearby` for 20 candidates; prev_recommended added to exclusion set
-   - β=0.5: Google search + top-rated revisit candidates injected into pool
-   - β=1.0 (≥3 revisits available): skip Google entirely; use revisit pool only
-   - β=1.0 (< 3 revisits): fall back to Google silently
-6. Pre-filter candidates: remove lodging, low-rated (<3.5), already-seen, type mismatches
-7. Build weighted taste profile via `build_taste_profile()` (controlled by `input_weight` α)
-8. Call `rank_candidates()` → Claude Haiku reads `prompt_rank.txt`, picks top 3 by number from candidate list
-9. All ranked results saved as `RequestRestaurant(type=recommendation)` — no additional API resolution needed
 
-## Prompt Format (`prompt_rank.txt`)
-Output format: `N. Restaurant Name - Because you liked [Liked 1] and [Liked 2] - 10-15 word description`
-- Claude picks by candidate number; `rank_candidates()` resolves name/place_id from `candidate_index`
-- Revisit candidates tagged `[previously recommended]` in the numbered list
-- `{revisit_instruction}` adjusts guidance based on β (≥0.7: revisits OK, =0: prefer new, else: empty)
-- `max_tokens=300`
+> Full detail: `docs/recommendation-flow.md`
+
+Two-stage pipeline: deterministic scoring + MMR selection pick the 3 candidates, then Haiku writes explanations.
+
+1. Fetch/create `Restaurant` records for input `place_ids`; load liked/disliked history
+2. Build candidate pool via Google `searchNearby` (controlled by `revisit_weight` β — see below)
+3. Pre-filter: remove lodging, already-seen, rating <3.5, type mismatches (each with ≥3 fallback)
+4. `build_taste_profile(history_objs, input_objs, alpha)` → `{preferred_price_level, top_cuisine_types, min_rating}`
+5. `score_candidates()` — fixed weights: cuisine 0.40, price 0.30, rating 0.25; soft dislike penalty −0.10/type (cap −0.30)
+6. `mmr_select()` — top 30% (min 5) of scored candidates → MMR with λ=0.7, similarity on `(primary_type, price_level)`
+7. Haiku (`prompt_rank.txt`) writes `"N. Name - Because you liked X and Y - description"` for each of the 3 picks
+8. Save all 3 as `RequestRestaurant(type=recommendation)`
+
+**Revisit weight (β):** β=0 excludes prior recommendations; β=0.5 injects top-rated revisits into the pool; β=1.0 uses revisit pool only (falls back to Google if <3 available).
+
+**Input weight (α):** controls `build_taste_profile` — α=1.0 means session inputs dominate; α=0.0 means liked history dominates. Does not affect scoring weights.
 
 ## Frontend Notes
 - Username persisted in `localStorage` under key `campfire_username`

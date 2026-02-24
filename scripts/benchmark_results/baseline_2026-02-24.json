@@ -1,0 +1,125 @@
+[
+  {
+    "scenario": "Scenario A \u2014 Session taqueria, no history",
+    "old_selection": [
+      {
+        "name": "Alinea",
+        "primary_type": "american_restaurant",
+        "rating": 4.9
+      },
+      {
+        "name": "Nobu",
+        "primary_type": "sushi_restaurant",
+        "rating": 4.8
+      },
+      {
+        "name": "Eataly",
+        "primary_type": "italian_restaurant",
+        "rating": 4.7
+      }
+    ],
+    "new_selection": [
+      {
+        "name": "Alinea",
+        "primary_type": "american_restaurant",
+        "rating": 4.9,
+        "score": 0
+      },
+      {
+        "name": "Nobu",
+        "primary_type": "sushi_restaurant",
+        "rating": 4.8,
+        "score": 0
+      },
+      {
+        "name": "Eataly",
+        "primary_type": "italian_restaurant",
+        "rating": 4.7,
+        "score": 0
+      }
+    ],
+    "llm_outputs": []
+  },
+  {
+    "scenario": "Scenario B \u2014 History-heavy Italian lover, sushi dislikes",
+    "old_selection": [
+      {
+        "name": "Nobu",
+        "primary_type": "sushi_restaurant",
+        "rating": 4.9
+      },
+      {
+        "name": "Juno Sushi",
+        "primary_type": "sushi_restaurant",
+        "rating": 4.7
+      },
+      {
+        "name": "Spacca Napoli",
+        "primary_type": "italian_restaurant",
+        "rating": 4.7
+      }
+    ],
+    "new_selection": [
+      {
+        "name": "Nobu",
+        "primary_type": "sushi_restaurant",
+        "rating": 4.9,
+        "score": 0
+      },
+      {
+        "name": "Juno Sushi",
+        "primary_type": "sushi_restaurant",
+        "rating": 4.7,
+        "score": 0
+      },
+      {
+        "name": "Spacca Napoli",
+        "primary_type": "italian_restaurant",
+        "rating": 4.7,
+        "score": 0
+      }
+    ],
+    "llm_outputs": []
+  },
+  {
+    "scenario": "Scenario C \u2014 No cuisine signal, mixed pool (regression check)",
+    "old_selection": [
+      {
+        "name": "Alinea",
+        "primary_type": "american_restaurant",
+        "rating": 4.9
+      },
+      {
+        "name": "Smyth",
+        "primary_type": "american_restaurant",
+        "rating": 4.8
+      },
+      {
+        "name": "Oriole",
+        "primary_type": "american_restaurant",
+        "rating": 4.7
+      }
+    ],
+    "new_selection": [
+      {
+        "name": "Alinea",
+        "primary_type": "american_restaurant",
+        "rating": 4.9,
+        "score": 0
+      },
+      {
+        "name": "Smyth",
+        "primary_type": "american_restaurant",
+        "rating": 4.8,
+        "score": 0
+      },
+      {
+        "name": "Oriole",
+        "primary_type": "american_restaurant",
+        "rating": 4.7,
+        "score": 0
+      }
+    ],
+    "llm_outputs": []
+  }
+]

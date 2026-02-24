@@ -218,19 +218,102 @@ def build_taste_profile(history_objs: list, input_objs: list, alpha: float = 0.7
     if type_counter:
         profile['top_cuisine_types'] = [t for t, _ in type_counter.most_common(3)]
 
-    dine_in = _weighted_bool(history_objs, input_objs, alpha, lambda r: r.serves_dine_in)
-    if dine_in is not None:
-        profile['prefers_dine_in'] = dine_in
-
-    takeout = _weighted_bool(history_objs, input_objs, alpha, lambda r: r.serves_takeout)
-    if takeout is not None:
-        profile['prefers_takeout'] = takeout
-
-    reservable = _weighted_bool(history_objs, input_objs, alpha, lambda r: r.reservable)
-    if reservable is not None:
-        profile['prefers_reservable'] = reservable
-
     return profile
+
+
+PRICE_ORDER = [
+    "PRICE_LEVEL_INEXPENSIVE",
+    "PRICE_LEVEL_MODERATE",
+    "PRICE_LEVEL_EXPENSIVE",
+    "PRICE_LEVEL_VERY_EXPENSIVE",
+]
+W_CUISINE = 0.40
+W_PRICE   = 0.30
+W_RATING  = 0.25
+
+
+def score_candidates(candidates, taste_profile, disliked_restaurant_objs=None):
+    """
+    Score each candidate against the taste profile. Returns the list sorted by
+    score descending, with '_score' added to each dict.
+
+    Weights are fixed — alpha's influence is already encoded in taste_profile.
+    """
+    preferred_price   = taste_profile.get('preferred_price_level')
+    top_cuisine_types = set(taste_profile.get('top_cuisine_types', []))
+
+    # Build dislike type counter for soft penalty
+    disliked_type_counts = Counter()
+    for r in (disliked_restaurant_objs or []):
+        if r.primary_type:
+            disliked_type_counts[r.primary_type] += 1
+
+    scored = []
+    for c in candidates:
+        score = 0.0
+
+        # Cuisine match — full credit for primary_type hit, half credit for categories
+        ptype = c.get('primary_type')
+        if ptype and ptype in top_cuisine_types:
+            score += W_CUISINE
+        elif top_cuisine_types and any(t in top_cuisine_types for t in c.get('categories', [])):
+            score += W_CUISINE * 0.5
+
+        # Price match — linear distance penalty across 4-tier scale
+        cprice = c.get('price_level')
+        if preferred_price and cprice:
+            try:
+                dist = abs(PRICE_ORDER.index(preferred_price) - PRICE_ORDER.index(cprice))
+                score += W_PRICE * max(0.0, 1.0 - dist / 3.0)
+            except ValueError:
+                pass  # unknown level, skip
+
+        # Rating — normalised above 3.5 floor (floor already enforced by pre-filter)
+        rating = c.get('rating')
+        if rating is not None:
+            score += W_RATING * min(1.0, (rating - 3.5) / 1.5)
+
+        # Dislike soft penalty — 0.10 per dislike of this type, capped at 0.30
+        if ptype and ptype in disliked_type_counts:
+            score -= min(0.30, 0.10 * disliked_type_counts[ptype])
+
+        scored.append({**c, '_score': score})
+
+    return sorted(scored, key=lambda x: x['_score'], reverse=True)
+
+
+def mmr_select(scored_candidates, n=3, lambda_=0.7):
+    """
+    Maximal Marginal Relevance selection.
+    Similarity is defined as the joint (primary_type, price_level) key:
+      - Both match  → 1.0
+      - One matches → 0.5
+      - Neither     → 0.0
+    """
+    if len(scored_candidates) <= n:
+        return scored_candidates
+
+    def similarity(a, b):
+        type_match  = bool(a.get('primary_type')  and a.get('primary_type')  == b.get('primary_type'))
+        price_match = bool(a.get('price_level') and a.get('price_level') == b.get('price_level'))
+        return 1.0 if (type_match and price_match) else (0.5 if (type_match or price_match) else 0.0)
+
+    selected  = []
+    remaining = list(scored_candidates)
+
+    while len(selected) < n and remaining:
+        if not selected:
+            chosen = remaining[0]   # highest score first
+        else:
+            chosen = max(
+                remaining,
+                key=lambda c: lambda_ * c['_score']
+                              - (1 - lambda_) * max(similarity(c, s) for s in selected)
+            )
+        selected.append(chosen)
+        remaining.remove(chosen)
+
+    return selected
 
 
 def rank_candidates(
@@ -245,10 +328,11 @@ def rank_candidates(
     liked_restaurant_objs: list = None,
     input_restaurant_objs: list = None,
     alpha: float = 0.7,
-    revisit_weight: float = 0.0
+    revisit_weight: float = 0.0,
+    disliked_restaurant_objs: list = None,
 ) -> list:
     """
-    Use Claude to rank real candidate restaurants and return the top num_recommendations.
+    Score and select candidates deterministically, then use Claude to explain the top picks.
     Returns a list of dicts with place_id, name, description, reason, address, rating, price_level.
     """
     if not candidates:
@@ -257,10 +341,24 @@ def rank_candidates(
 
     prompt_template = load_rank_prompt_template()
 
-    # Build numbered candidate lines and index for lookup
+    # --- Two-stage deterministic selection ---
+    scored = score_candidates(candidates, taste_profile, disliked_restaurant_objs)
+    n_top = max(5, round(len(scored) * 0.30))
+    top_candidates = scored[:n_top]
+    final_picks = mmr_select(top_candidates, n=num_recommendations)
+    logging.debug(
+        f"score_candidates top {n_top}: "
+        + ", ".join(f"{c['name']}({c.get('_score',0):.3f})" for c in top_candidates)
+    )
+    logging.debug(
+        f"mmr_select picks: "
+        + ", ".join(f"{c['name']}({c.get('_score',0):.3f})" for c in final_picks)
+    )
+
+    # Build numbered candidate lines and index from final_picks only
     candidate_index = {}
     candidate_lines = []
-    for i, c in enumerate(candidates, start=1):
+    for i, c in enumerate(final_picks, start=1):
         candidate_index[i] = c
         parts = []
         if c.get('primary_type'):
@@ -291,10 +389,6 @@ def rank_candidates(
                 parts.append(r.price_level)
             if r.rating is not None:
                 parts.append(f"rating: {r.rating}")
-            if r.serves_dine_in:
-                parts.append("dine-in")
-            if r.reservable:
-                parts.append("reservable")
             if r.editorial_summary:
                 parts.append(r.editorial_summary)
             meta = ", ".join(parts)
@@ -312,9 +406,9 @@ def rank_candidates(
         history_section = "**Past preferences (use for broader taste context):**\n" + "\n".join(lines) + "\n\n"
 
     if alpha >= 0.7:
-        alpha_instruction = "The user's current session inputs should heavily influence your selection.\n\n"
+        alpha_instruction = "The user's current session inputs should be the primary focus of your explanations.\n\n"
     elif alpha <= 0.3:
-        alpha_instruction = "Draw primarily from the user's historical taste profile.\n\n"
+        alpha_instruction = "Draw primarily from the user's historical taste profile when writing explanations.\n\n"
     else:
         alpha_instruction = ""
 
@@ -338,8 +432,6 @@ def rank_candidates(
         preferred_price_level=taste_profile.get('preferred_price_level', 'any'),
         min_rating=taste_profile.get('min_rating', 'any'),
         top_cuisine_types=", ".join(taste_profile.get('top_cuisine_types', [])) or 'any',
-        prefers_dine_in=taste_profile.get('prefers_dine_in', 'unknown'),
-        prefers_reservable=taste_profile.get('prefers_reservable', 'unknown'),
         session_section=session_section,
         history_section=history_section,
         alpha_instruction=alpha_instruction,

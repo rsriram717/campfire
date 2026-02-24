@@ -2,205 +2,306 @@
 
 ## Overview
 
-Campfire uses a **candidate ranking** approach to restaurant recommendations. Rather than asking an LLM to invent restaurant names from its training data (which produced well-known tourist spots and frequent hallucinations), the model is given a pool of **real, verified restaurants** from the Google Places API and asked to rank them based on the user's taste profile.
+Campfire uses a **two-stage pipeline** to produce restaurant recommendations:
+
+1. **Deterministic selection** — a scoring function (`score_candidates`) and diversity filter (`mmr_select`) pick the 3 best candidates from a real Google Places pool, using the user's taste profile and dislike history.
+2. **LLM explanation** — Claude Haiku receives the pre-selected 3 and writes a personalized explanation for each. It does not select or reorder.
 
 This approach:
-- Eliminates hallucinated or invented restaurant names
-- Allows niche and local spots to surface as the restaurant DB grows from user inputs
-- Reduces Google API calls from ~9 per request down to 2, and often 1 with DB caching
+- Eliminates hallucinated restaurant names (Haiku only sees real, verified candidates)
+- Produces consistent, principled selection (the same taste profile + candidate pool always yields the same picks)
+- Lets Haiku focus on explanation quality rather than splitting attention between selection and description
 
-The ranking step uses **Claude Haiku** (`claude-haiku-4-5-20251001`). The task is constrained selection from a structured list — format adherence and speed matter more than deep reasoning, making Haiku the right fit at ~70x lower cost than GPT-4.
+The explanation step uses **Claude Haiku** (`claude-haiku-4-5-20251001`). The task is format-constrained writing from structured input — speed and cost matter more than deep reasoning. Haiku costs ~70× less than GPT-4 and performs well here.
 
 ---
 
 ## End-to-End Request Flow
 
 ```
-User submits place_ids + city + neighborhood + types
+User submits place_ids + city + neighborhood + types + input_weight (α) + revisit_weight (β)
         │
         ▼
-1. Resolve input restaurants
-   get_details() for each place_id → enrich + store as Restaurant records
+1. Input & DB setup
+   Fetch or create Restaurant records for each input place_id
+   Load liked/disliked history from UserRestaurantPreference
         │
         ▼
-2. Build taste profile
-   Aggregate liked Restaurant ORM objects → price level, rating, cuisine types
+2. Candidate pool construction  (controlled by β)
+   β=0:   Google searchNearby → 20 candidates; exclude prev_recommended
+   β=0.5: Google searchNearby + inject top-rated revisit candidates
+   β=1.0: Use revisit pool only (fall back to Google if <3 revisits)
         │
         ▼
-3. Get candidate pool
-   Check DB cache → if ≥20 fresh records for city: use DB (no API call)
-                 → if cache miss: call searchNearby → upsert all results to DB
+3. Pre-filtering
+   Remove lodging, already-seen, low-rated (<3.5), type mismatches
+   Each filter has a ≥3 survival fallback (skip filter if too few would remain)
         │
         ▼
-4. Rank candidates
-   Haiku receives: taste profile + numbered real candidates
-   Haiku selects 3, returns numbers + explanations
-   Parse numbers → resolve via candidate_index (no API call)
+4. Taste profile
+   build_taste_profile(history_objs, input_objs, alpha)
+   → preferred_price_level, top_cuisine_types, min_rating
         │
         ▼
-5. Persist + return
-   Upsert 3 Restaurant records, create RequestRestaurant links
-   Return [{id, name, description, reason, address}]
+5. Scoring
+   score_candidates(candidates, taste_profile, disliked_objs)
+   → full list sorted by _score descending
+        │
+        ▼
+6. MMR selection
+   top_n = max(5, round(len * 0.30))
+   mmr_select(scored[:top_n], n=3)
+   → 3 diverse, high-scoring final picks
+        │
+        ▼
+7. Haiku explanation
+   rank_candidates() sends final 3 to Haiku via prompt_rank.txt
+   Haiku writes "Because you liked X and Y — 10-15 word description" for each
+   Results resolved via candidate_index (no extra API call)
+        │
+        ▼
+8. Persist + return
+   Save all 3 as RequestRestaurant(type=recommendation)
+   Return [{place_id, name, description, reason, address, rating, price_level}]
 ```
 
 ---
 
 ## Step-by-Step Detail
 
-### 1. Resolve Input Restaurants
+### 1. Input & DB Setup
 
 The frontend sends `place_ids` (Google Place IDs from autocomplete). For each:
 
-1. Check if a `Restaurant` record with that `place_id` already exists in the DB.
-2. If not, call `google_service.get_details(place_id)` to fetch rich metadata.
-3. Create a `Restaurant` record with all fields populated (see schema below).
-4. Link to the current `UserRequest` via `RequestRestaurant(type=input)`.
+1. Check if a `Restaurant` with that `place_id` exists in the DB.
+2. If not, call `google_service.get_details(place_id)` to fetch rich metadata and create the record.
+3. Link to the current `UserRequest` via `RequestRestaurant(type=input)`.
 
-Rich fields fetched: `price_level`, `rating`, `user_rating_count`, `editorial_summary`, `primary_type`, `serves_dine_in`, `serves_takeout`, `serves_delivery`, `reservable`. Both `last_enriched_at` and `city_hint` are set to support caching.
+Then load `UserRestaurantPreference` for the current user, splitting into `liked_restaurant_objs` and `disliked_restaurant_objs` (ORM `Restaurant` objects).
 
 ---
 
-### 2. Build Taste Profile
+### 2. Candidate Pool Construction
 
-`build_taste_profile(liked_restaurant_objs)` in `openai_example.py` aggregates signal from the user's liked restaurants (`UserRestaurantPreference`) plus the current inputs:
+`prev_recommended` = all `RequestRestaurant(type=recommendation)` for this user+city, excluding disliked places.
+
+Behaviour is controlled by **β** (`revisit_weight`, 0.0–1.0):
+
+| β | Behaviour |
+|---|---|
+| 0.0 | `searchNearby` → 20 candidates from Google; `prev_recommended` added to exclusion set |
+| 0.0–1.0 | `searchNearby` + inject top `round(β × min(len(prev_recommended), 10))` revisit candidates |
+| 1.0, ≥3 revisits | Skip Google entirely; candidate pool = `prev_recommended` only |
+| 1.0, <3 revisits | Fall back silently to `searchNearby` |
+
+`searchNearby` endpoint: `POST https://places.googleapis.com/v1/places:searchNearby`
+Returns up to 20 restaurants near city centre coordinates. All rich fields come back in a single call — no per-restaurant follow-up needed.
+
+**Note on pool quality:** The initial `searchNearby` seed is biased toward mainstream/popular restaurants from the city centre. The pool improves over time as users input niche favourites via autocomplete — each autocomplete selection runs `get_details()` and stores the result with `city_hint`, making it a candidate for all future requests in that city.
+
+---
+
+### 3. Pre-Filtering
+
+Applied in order. Each filter has a **≥3 fallback**: if applying the filter would leave fewer than 3 candidates, the filter is skipped entirely.
+
+| # | Filter | Skipped when |
+|---|---|---|
+| 1 | Remove lodging types (hotels, motels, hostels, etc.) | Revisit-only pool (β=1.0) |
+| 2 | Remove already-seen place_ids (liked + disliked + current inputs) | Revisit-only pool (β=1.0) |
+| 3 | Remove candidates with rating < 3.5 | Fewer than 3 would survive |
+| 4 | Remove type mismatches (Fine Dining / Bar / Casual) | Fewer than 3 would match |
+
+Type matching rules:
+- **Fine Dining**: `price_level` in `{EXPENSIVE, VERY_EXPENSIVE}` OR `primary_type == fine_dining_restaurant`
+- **Bar**: `primary_type` or any category in `{bar, cocktail_bar, wine_bar, pub, bar_and_grill}`
+- **Casual**: anything not Fine Dining
+
+---
+
+### 4. Taste Profile — `build_taste_profile(history_objs, input_objs, alpha)`
+
+Derives a weighted profile from liked history and current session inputs. Returns an empty dict if no signal exists.
+
+**α** (`input_weight`, 0.0–1.0): controls how much the session inputs vs. history dominate.
+- α=1.0 → session inputs fully control
+- α=0.0 → liked history fully controls
+- Each source is normalized to its weight fraction before combining
+
+Output fields (omitted entirely if no signal):
 
 | Field | Derivation |
 |---|---|
-| `preferred_price_level` | Mode of `price_level` across liked restaurants |
-| `min_rating` | Mean of `rating` values, rounded to 1 decimal |
-| `top_cuisine_types` | Top 3 most common `primary_type` values |
-| `prefers_dine_in` | True if ≥50% of liked restaurants with the field set are True |
-| `prefers_takeout` | True if ≥50% of liked restaurants with the field set are True |
-| `prefers_reservable` | True if ≥50% of liked restaurants with the field set are True |
+| `preferred_price_level` | Most-common `price_level` by weighted vote across history + inputs |
+| `top_cuisine_types` | Top 3 `primary_type` values by weighted vote (e.g. `["italian_restaurant", "sushi_restaurant"]`) |
+| `min_rating` | Weighted average of `rating` values, rounded to 1 decimal |
 
-For new users, or users whose liked restaurants predate the rich schema (all fields NULL), the profile will be sparse — the ranking prompt still works, just with less signal.
+**Note:** `serves_dine_in`, `serves_takeout`, `serves_delivery`, and `reservable` are stored in the DB but are not used in the taste profile or recommendation logic.
 
 ---
 
-### 3. Get Candidate Pool
+### 5. Scoring — `score_candidates(candidates, taste_profile, disliked_restaurant_objs)`
 
-The `Restaurant` table acts as a **local restaurant index** that accumulates over time. Before calling the Places API, the DB is checked for a warm cache:
+Scores every pre-filtered candidate against the taste profile. Weights are fixed — α's influence is already encoded in `taste_profile`.
 
-```python
-fresh_cutoff = datetime.utcnow() - timedelta(days=30)
-cached = Restaurant.query.filter(
-    Restaurant.city_hint == city,
-    Restaurant.last_enriched_at >= fresh_cutoff,
-    Restaurant.provider == 'google'
-).limit(40).all()
+```
+score = 0.0
 
-if len(cached) >= 20:
-    # Use DB cache — no API call
-    candidates = [restaurant_to_candidate_dict(r) for r in cached]
-else:
-    # Cache miss — call Places API and store results
-    candidates = places_service.search_nearby_candidates(city, neighborhood)
-    for c in candidates:
-        upsert_or_update(c, city)
+── Cuisine (W = 0.40) ────────────────────────────────────────────────────────
+  candidate.primary_type in top_cuisine_types          → +0.40  (full credit)
+  any candidate.category in top_cuisine_types          → +0.20  (half credit)
+  no match, or top_cuisine_types is empty              → +0.00
+
+── Price (W = 0.30) ──────────────────────────────────────────────────────────
+  Tiers (in order): INEXPENSIVE(0), MODERATE(1), EXPENSIVE(2), VERY_EXPENSIVE(3)
+  dist = |index(preferred_price_level) - index(candidate.price_level)|
+  score += 0.30 × max(0, 1 - dist/3)
+
+  dist=0 (exact match)  → +0.30
+  dist=1 (one tier off) → +0.20
+  dist=2 (two tiers)    → +0.10
+  dist=3 (three tiers)  → +0.00
+  Either price absent   → +0.00 (skipped)
+
+── Rating (W = 0.25) ─────────────────────────────────────────────────────────
+  Normalized above 3.5 floor (pre-filter already enforces rating ≥ 3.5)
+  score += 0.25 × min(1.0, (rating - 3.5) / 1.5)
+
+  rating 3.5 → +0.00
+  rating 4.25 → +0.125
+  rating 5.0  → +0.25
+
+── Dislike penalty (soft) ────────────────────────────────────────────────────
+  count = number of disliked restaurants with the same primary_type
+  score -= min(0.30, 0.10 × count)
+
+  1 dislike of this type → -0.10
+  2 dislikes             → -0.20
+  3+ dislikes            → -0.30 (cap)
 ```
 
-#### `searchNearby` call details
+Returns the full candidate list sorted by `_score` descending, with `_score` added to each dict. Original candidate dicts are not mutated (a copy is made).
 
-- Endpoint: `POST https://places.googleapis.com/v1/places:searchNearby`
-- Returns up to 20 restaurants near the city's centre coordinates (hardcoded in `google_service.py`)
-- Field mask uses `places.` prefix (unlike single-place `get_details` requests)
-- All rich fields are returned in a single call — no per-restaurant follow-up needed
-
-#### Honest assessment of the candidate pool
-
-The `searchNearby` cold-cache seed is **biased toward mainstream restaurants**. Google ranks results by its own popularity signal from the city centre, so the initial pool tends to include well-known chains, tourist spots, and even hotels. In testing, the first Chicago `searchNearby` call returned McDonald's, Giordano's chain locations, and several hotels alongside better matches.
-
-The candidate pool improves over time primarily through **user inputs**, not `searchNearby`:
-
-- Every time any user selects a restaurant from autocomplete, `get_details()` runs on it and it is stored with `city_hint` and `last_enriched_at`. That restaurant then enters the candidate pool for all future requests for that city.
-- As users collectively input their favourite niche spots, those spots accumulate in the DB and get served as candidates to future users.
-- After 30 days the cache expires, `searchNearby` fires again, and newly user-contributed restaurants remain in the pool (they have their own `last_enriched_at` timestamps).
-
-So niche restaurant discovery is a collective, emergent property: the more users use the app and input restaurants they love, the better the candidate pool becomes for everyone.
+Maximum possible score: 0.40 + 0.30 + 0.25 = **0.95** (perfect cuisine + price + rating=5.0, no penalty).
 
 ---
 
-### 4. Rank Candidates with Claude Haiku
+### 6. MMR Selection — `mmr_select(scored_candidates, n=3, lambda_=0.7)`
 
-`rank_candidates(...)` in `openai_example.py`:
+Selects a diverse final set from the top-scored candidates.
 
-1. Builds a numbered list of candidates with their metadata:
-   ```
-   1. Au Cheval — american_restaurant, PRICE_LEVEL_MODERATE, rating: 4.7. Classic diner-style spot known for smash burgers.
-   2. Kasama — filipino_restaurant, PRICE_LEVEL_MODERATE, rating: 4.5. ...
-   ...
-   ```
+**Top-N filter** (applied in `rank_candidates` before calling `mmr_select`):
+```
+n_top = max(5, round(len(candidates) × 0.30))
+pool  = scored_candidates[:n_top]
+```
+For a typical 20-candidate pool: n_top = max(5, 6) = 6. Minimum of 5 prevents MMR from having too small a pool on short lists.
 
-2. Constructs a prompt from `prompt_rank.txt` with the taste profile, liked/disliked names, and the numbered candidate list.
+**MMR selection loop** — iteratively picks the candidate that maximises:
+```
+MMR(c) = λ × c._score  −  (1 − λ) × max_similarity(c, already_selected)
+```
+λ=0.7 weights 70% relevance, 30% diversity. The first pick is always the highest-scored candidate (no selected set yet, so no penalty).
 
-3. Calls Claude Haiku (`max_tokens=300`). Haiku returns lines like:
-   ```
-   3. Avec - Because you liked Au Cheval and Girl & The Goat - Cozy Mediterranean small plates, excellent natural wine list
-   ```
+**Similarity** is defined on the joint `(primary_type, price_level)` key:
+```
+both match  → 1.0   (same cuisine AND same price tier)
+one matches → 0.5   (same cuisine OR same price tier)
+neither     → 0.0
+```
 
-4. Parses the leading number → looks up `candidate_index[N]` → gets `place_id`, `name`, `address` directly. **No additional API call is needed.**
+**Example (Scenario B — Italian history, sushi dislikes):**
+```
+Scored pool (top 5):
+  Spacca Napoli  italian / MODERATE  score=0.900
+  Monteverde     italian / MODERATE  score=0.883
+  Eataly         italian / EXPENSIVE score=0.767
+  Au Cheval      american / MODERATE score=0.467
+  Avec           mediterr / MODERATE score=0.467
 
-Haiku is used here because the task is constrained: select 3 from a numbered list and follow a rigid output format. The model is not being asked to reason about unknown restaurants from memory — all the data is in the prompt. Haiku handles this well at a fraction of the cost of larger models.
+Pick 1: Spacca Napoli (0.900)
+Pick 2: MMR scores:
+  Monteverde:  0.7×0.883 − 0.3×1.0 = 0.318  (same type+price → sim=1.0)
+  Eataly:      0.7×0.767 − 0.3×0.5 = 0.387  (same type, diff price → sim=0.5)
+  Au Cheval:   0.7×0.467 − 0.3×0.0 = 0.327  (diff type+price → sim=0.0)
+  → Eataly wins (0.387)
+Pick 3: MMR scores against [Spacca, Eataly]:
+  Monteverde:  0.7×0.883 − 0.3×max(1.0,0.5) = 0.318
+  Au Cheval:   0.7×0.467 − 0.3×max(0.0,0.0) = 0.327
+  → Au Cheval wins (0.327)
+Final: Spacca Napoli, Eataly, Au Cheval
+```
 
 ---
 
-### 5. Persist and Return
+### 7. Haiku Explanation — `rank_candidates()` + `prompt_rank.txt`
 
-For each ranked result:
-- Look up or create a `Restaurant` record by `(provider='google', place_id=...)`.
-- Create a `RequestRestaurant(type=recommendation)` link.
-- Return `{id, name, description, reason, address}` to the frontend.
+The 3 selected candidates are sent to Haiku as a numbered list. Haiku **writes explanations only** — it does not select or reorder.
 
-The `reason` field (e.g. "Because you liked Au Cheval and Girl & The Goat") is displayed in the UI recommendation card.
+**Candidate line format sent to Haiku:**
+```
+N. Restaurant Name [previously recommended]  — primary_type, price_level, rating: X.X, editorial_summary
+```
+The `[previously recommended]` tag appears when `_is_revisit=True`.
+
+**Prompt context injected:**
+
+| Variable | Content |
+|---|---|
+| `session_section` | Current-session input restaurants: `- Name: type, price, rating` |
+| `history_section` | Liked-history restaurants: `- Name: type, price, rating` |
+| `alpha_instruction` | α≥0.7 → "emphasize session inputs"; α≤0.3 → "draw from history"; else empty |
+| `revisit_instruction` | β≥0.7 → "revisits OK"; β=0.0 → "prefer new"; else empty |
+| `liked_names` | Comma-separated liked restaurant names (do not recommend these) |
+| `disliked_names` | Comma-separated disliked restaurant names |
+| `neighborhood_section` | Neighbourhood preference string (if set) |
+| `type_section` | Restaurant type preference (if set) |
+
+**Output format:**
+```
+N. Restaurant Name - Because you liked [Name1] and [Name2] - 10-15 word description
+```
+
+`rank_candidates()` parses the leading number, resolves it via `candidate_index` (a dict built from `final_picks`), and returns the official Google `name` and `place_id` — no extra API call needed. Haiku's restatement of the name is discarded.
+
+`max_tokens=500`
+
+---
+
+### 8. Persistence
+
+For each of the 3 results:
+1. Look up or create a `Restaurant` record by `(provider='google', place_id=...)`.
+2. Create a `RequestRestaurant(type=recommendation)` link to the current `UserRequest`.
+
+This populates `prev_recommended` for future requests, enabling the revisit pool and preference tracking.
 
 ---
 
 ## Restaurant Table Schema
 
-The `Restaurant` table serves dual purpose: canonical record of a place and candidate cache index.
+The `Restaurant` table serves dual purpose: canonical record of a place and candidate pool for future requests.
 
-| Column | Type | Description |
+| Column | Type | Used in recommendations? |
 |---|---|---|
-| `id` | Integer PK | |
-| `name` | String(100) | Official name from Google |
-| `location` | String(100) | Formatted address |
-| `cuisine_type` | String(200) | Google `types[]` joined as string |
-| `provider` | String(20) | Always `google` for real places |
-| `place_id` | String(128) | Google Place ID |
-| `slug` | String(200) | URL-friendly identifier |
-| `price_level` | String(50) | e.g. `PRICE_LEVEL_MODERATE` |
-| `rating` | Float | Google rating (1–5) |
-| `user_rating_count` | Integer | Number of Google reviews |
-| `editorial_summary` | Text | Google's editorial blurb, if available |
-| `primary_type` | String(100) | e.g. `american_restaurant`, `filipino_restaurant` |
-| `serves_dine_in` | Boolean | |
-| `serves_takeout` | Boolean | |
-| `serves_delivery` | Boolean | |
-| `reservable` | Boolean | |
-| `last_enriched_at` | DateTime | When rich fields were last fetched — drives cache TTL |
-| `city_hint` | String(100) | City used when record was fetched — enables cache query |
-
----
-
-## API Call Comparison
-
-| Scenario | Old flow | New flow |
-|---|---|---|
-| Google API calls per request | ~9 (3× input details + 3× autocomplete + 3× resolution details) | 2 (N× input details + 1 searchNearby) |
-| Warm DB cache hit | — | N× input details only (no Places API for candidates) |
-| LLM calls | 1 (GPT-4 invents names) | 1 (Haiku ranks real candidates) |
-| LLM cost per request | ~$0.018 (GPT-4) | ~$0.00025 (Haiku) |
-| Hallucination risk | High | None — model only selects from real candidates |
-
----
-
-## Known Limitations
-
-**`searchNearby` seed quality**: The cold-cache `searchNearby` call queries from the city centre and returns Google's popularity-ranked results. This skews toward chains and well-known spots. The initial pool for a new city will not be particularly niche.
-
-**Fixed candidate pool between cache refreshes**: Once ≥20 records exist for a city, `searchNearby` doesn't fire again for 30 days. The pool is static until user inputs add to it or the cache expires.
-
-**Neighbourhood parameter is informational only**: The `neighborhood` value is passed as text context to Haiku in the ranking prompt but does not currently restrict the `searchNearby` geographic query. All candidates come from a fixed radius around the city centre regardless of neighbourhood selection.
+| `id` | Integer PK | — |
+| `name` | String(100) | Yes — displayed to user |
+| `location` | String(100) | Yes — displayed to user |
+| `cuisine_type` | Text | No (legacy field) |
+| `provider` | String(20) | Yes — always `google` for real places |
+| `place_id` | String(128) | Yes — unique identifier |
+| `slug` | String(200) | No — URL routing only |
+| `price_level` | String(50) | Yes — scoring + taste profile |
+| `rating` | Float | Yes — scoring + taste profile |
+| `user_rating_count` | Integer | No |
+| `editorial_summary` | Text | Yes — sent to Haiku |
+| `primary_type` | String(100) | Yes — scoring + taste profile |
+| `serves_dine_in` | Boolean | No — stored but not used in logic |
+| `serves_takeout` | Boolean | No — stored but not used in logic |
+| `serves_delivery` | Boolean | No — stored but not used in logic |
+| `reservable` | Boolean | No — stored but not used in logic |
+| `last_enriched_at` | DateTime | Yes — drives 30-day cache TTL |
+| `city_hint` | String(100) | Yes — enables candidate cache query |
 
 ---
 
@@ -208,10 +309,20 @@ The `Restaurant` table serves dual purpose: canonical record of a place and cand
 
 | File | Role |
 |---|---|
-| `app.py` | `/get_recommendations` route — orchestrates the full flow |
-| `openai_example.py` | `build_taste_profile()`, `rank_candidates()` |
-| `prompt_rank.txt` | Haiku ranking prompt template |
+| `app.py` | `/get_recommendations` route — orchestrates full flow, all pre-filtering |
+| `openai_example.py` | `build_taste_profile`, `score_candidates`, `mmr_select`, `rank_candidates` |
+| `prompt_rank.txt` | Haiku explanation prompt template |
 | `services/google_service.py` | `get_details()`, `search_nearby_candidates()` |
-| `services/places.py` | Abstract base class for places providers |
-| `models.py` | `Restaurant` ORM model with all rich fields |
-| `migrations/versions/add_rich_metadata_to_restaurant.py` | Migration adding 11 new columns |
+| `models.py` | `Restaurant`, `UserRequest`, `RequestRestaurant`, `UserRestaurantPreference` |
+
+---
+
+## Known Limitations
+
+**`searchNearby` seed quality**: Cold-cache calls query from the city centre using Google's popularity ranking. The initial pool skews toward chains and well-known spots. Niche candidates enter the pool only through user autocomplete inputs.
+
+**Neighbourhood parameter is informational only**: `neighborhood` is passed as text context to Haiku but does not restrict the `searchNearby` geographic query. All candidates come from a fixed radius around the city centre regardless of neighbourhood selection.
+
+**Revisit pool depends on prior usage**: The revisit pool (`prev_recommended`) is user+city specific. New users or users exploring a new city get β=1.0 silently falling back to Google.
+
+**Input restaurants not auto-liked**: Submitting a restaurant as an input does not create a `UserRestaurantPreference(like)`. It informs the session taste profile via `input_restaurant_objs` but does not persist to history unless the user explicitly likes it in the Preferences tab.
