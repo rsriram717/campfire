@@ -152,14 +152,22 @@ def clean_db(app):
 
     Operates directly on the session-scoped app context — no nested
     ``with app.app_context()`` to avoid the teardown_appcontext pitfall.
+
+    expunge_all() clears the identity map after each cleanup so that SQLite's
+    recycled auto-increment IDs don't cause identity-map collisions across tests.
+    rollback() first handles any pending bad state left by a failed test body.
     """
+    _db.session.rollback()
     for table in reversed(_db.metadata.sorted_tables):
         _db.session.execute(table.delete())
     _db.session.commit()
+    _db.session.expunge_all()
     yield
+    _db.session.rollback()
     for table in reversed(_db.metadata.sorted_tables):
         _db.session.execute(table.delete())
     _db.session.commit()
+    _db.session.expunge_all()
 
 
 # ---------------------------------------------------------------------------
