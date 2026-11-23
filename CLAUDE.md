@@ -13,6 +13,9 @@ Every non-trivial change follows this lifecycle. Do not skip steps.
 
 For trivial fixes (typos, one-line bugs), steps 1 and 5 can be skipped.
 
+## Vision
+**Read `docs/vision.md` before product or architecture decisions.** In short: Campfire is a taste engine that catalogs taste (user profiles, plus restaurant taste profiles and match data), not restaurant facts. Restaurant facts are fetched live. The current implementation is mid-transition toward this.
+
 ## What It Is
 AI-powered restaurant recommendation web app. Users input favorite restaurants → a two-stage pipeline (deterministic scoring + MMR selection) picks 3 candidates, then Claude Haiku writes personalized explanations, based on liked/disliked history, city, neighborhood, type filters, and two weighting sliders.
 
