@@ -1,0 +1,5 @@
+# Engine dependencies, layered on top of the root requirements.txt.
+# Requires Python >= 3.10 (MCP SDK).
+-r ../requirements.txt
+mcp>=2.3,<3
+numpy>=1.26

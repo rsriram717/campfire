@@ -64,3 +64,4 @@ node_modules/
 # Other
 scratch.py
 screenshot.js
+engine.db
